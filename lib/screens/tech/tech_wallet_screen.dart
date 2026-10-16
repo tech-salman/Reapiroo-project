@@ -96,11 +96,16 @@ class _TechWalletScreenState extends State<TechWalletScreen> {
         (balanceDetails?['pendingBalance'] as num?)?.toDouble() ??
         0.0;
 
+    final storedTotal = (data['totalEarnings'] as num?)?.toDouble() ??
+        (data['totalRevenue'] as num?)?.toDouble() ??
+        (data['lifetimeEarnings'] as num?)?.toDouble() ??
+        0.0;
+
     if (mounted) {
       setState(() {
         _availableBalance = current;
         _pendingBalance = pending;
-        _totalBalance = current + pending;
+        _totalBalance = storedTotal > 0 ? storedTotal : (_totalBalance > 0 ? _totalBalance : (current + pending));
       });
     }
   }
@@ -156,10 +161,17 @@ class _TechWalletScreenState extends State<TechWalletScreen> {
       // 2. Listen to Tech Transactions Stream
       _transactionSub?.cancel();
       _transactionSub = PaymentAndTransactionService().fetchUserTransactions(techId, isTech: true).listen((txList) {
+        double cumulativeEarnings = 0.0;
+
         final loaded = txList.map((tx) {
-          final isCredit = tx.netTechnicianEarnings >= 0;
+          final earnings = tx.netTechnicianEarnings != 0.0 ? tx.netTechnicianEarnings : tx.amount;
+          final isCredit = earnings >= 0;
+          if (isCredit && tx.bookingId != 'WITHDRAWAL') {
+            cumulativeEarnings += earnings;
+          }
+
           final sign = isCredit ? '+' : '';
-          final amountStr = '$sign${tx.netTechnicianEarnings.toStringAsFixed(0)} AED';
+          final amountStr = '$sign${earnings.abs().toStringAsFixed(0)} AED';
 
           String dateGroup = 'Recent';
           if (tx.timestamp != null) {
@@ -189,6 +201,11 @@ class _TechWalletScreenState extends State<TechWalletScreen> {
           setState(() {
             _transactions.clear();
             _transactions.addAll(loaded);
+            if (cumulativeEarnings > 0) {
+              _totalBalance = cumulativeEarnings > (_availableBalance + _pendingBalance)
+                  ? cumulativeEarnings
+                  : (_availableBalance + _pendingBalance > cumulativeEarnings ? _availableBalance + _pendingBalance : cumulativeEarnings);
+            }
           });
         }
       });

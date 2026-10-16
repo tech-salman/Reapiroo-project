@@ -47,14 +47,22 @@ class TransactionModel {
       return null;
     }
 
+    final double amt = (map['amount'] as num?)?.toDouble() ??
+        (map['grossAmount'] as num?)?.toDouble() ??
+        0.0;
+
+    final double net = (map['netTechnicianEarnings'] as num?)?.toDouble() ??
+        (map['netAmount'] as num?)?.toDouble() ??
+        (amt > 0 ? amt * 0.90 : amt);
+
     return TransactionModel(
       transactionId: docId ?? map['transactionId'] as String? ?? '',
       bookingId: map['bookingId'] as String? ?? '',
       customerId: map['customerId'] as String? ?? '',
       technicianId: map['technicianId'] as String? ?? '',
-      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
-      platformFee: (map['platformFee'] as num?)?.toDouble() ?? 0.0,
-      netTechnicianEarnings: (map['netTechnicianEarnings'] as num?)?.toDouble() ?? 0.0,
+      amount: amt,
+      platformFee: (map['platformFee'] as num?)?.toDouble() ?? (amt > 0 ? amt * 0.10 : 0.0),
+      netTechnicianEarnings: net,
       paymentMethod: map['paymentMethod'] as String? ?? 'cash_on_delivery',
       paymentStatus: map['paymentStatus'] as String? ?? 'paid',
       timestamp: parseDateTime(map['timestamp'] ?? map['createdAt']),

@@ -808,12 +808,21 @@ class DatabaseService {
     final custDoc = await getCustomerProfile(cleanCustomerId);
     final currentBal = (custDoc.data()?['walletBalance'] as num?)?.toDouble() ?? 0.0;
 
+    final techDoc = await getTechProfile(cleanTechId);
+    final techData = techDoc.exists ? techDoc.data() : null;
+    final techName = (techData?['name'] as String? ?? techData?['fullName'] as String? ?? techData?['displayName'] as String? ?? '').trim();
+    final techAvatar = (techData?['avatarUrl'] as String? ?? techData?['profilePictureUrl'] as String? ?? '').trim();
+
     final paymentId = generateFirestoreId();
     final now = FieldValue.serverTimestamp();
     final updateData = {
       'status': 'booked',
       'bookedTechId': cleanTechId,
       'assignedTechId': cleanTechId,
+      'bookedTechName': techName.isNotEmpty ? techName : 'Technician',
+      'techName': techName.isNotEmpty ? techName : 'Technician',
+      'bookedTechAvatar': techAvatar,
+      'techAvatar': techAvatar,
       'acceptedOfferId': bidId,
       'acceptedBidId': bidId,
       'agreedPrice': amount,
@@ -871,7 +880,6 @@ class DatabaseService {
     }
 
     // 2. Update Tech Wallet Balance & Request Details (Real Credit)
-    final techDoc = await getTechProfile(cleanTechId);
     final techBal = (techDoc.data()?['walletBalance'] as num?)?.toDouble() ?? 0.0;
     final techRef = techDoc.exists ? techDoc.reference : _db.collection('techs').doc(cleanTechId);
 
@@ -1228,10 +1236,15 @@ class DatabaseService {
     final techDoc = await getTechProfile(techId);
     final canonicalTechId = techDoc.exists ? techDoc.id : techId;
     final currentBal = (techDoc.data()?['walletBalance'] as num?)?.toDouble() ?? 0.0;
+    final currentPending = (techDoc.data()?['pendingBalance'] as num?)?.toDouble() ??
+        ((techDoc.data()?['balanceDetails'] as Map<String, dynamic>?)?['pendingBalance'] as num?)?.toDouble() ??
+        0.0;
+
     if (currentBal >= amount) {
       final docRef = techDoc.exists ? techDoc.reference : _techAccountDoc(canonicalTechId);
       await docRef.set({
         'walletBalance': currentBal - amount,
+        'pendingBalance': currentPending + amount,
         'updatedAt': now,
       }, SetOptions(merge: true));
 

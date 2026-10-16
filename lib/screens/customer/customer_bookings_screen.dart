@@ -18,7 +18,7 @@ import 'package:reapiroo/widgets/notification_bell_button.dart';
 
 class CustomerBookingItem {
   final String id;
-  final String techName;
+  String techName;
   final String serviceName;
   String location;
   String description;
@@ -26,13 +26,15 @@ class CustomerBookingItem {
   final String timeText;
   String status; // 'pending', 'booked', 'in_progress', 'completed', 'cancelled'
   bool isSparePartsPaid;
-  final String avatarUrl;
+  String avatarUrl;
   final String serviceImageUrl;
   final List mediaUrls;
   final String? sparePartImageUrl;
   final bool needSpareParts;
   final String? bookedTechId;
   final String? voiceNoteUrl;
+  double rating;
+  int ratingCount;
 
   CustomerBookingItem({
     required this.id,
@@ -51,6 +53,8 @@ class CustomerBookingItem {
     this.needSpareParts = false,
     this.bookedTechId,
     this.voiceNoteUrl,
+    this.rating = 4.8,
+    this.ratingCount = 15,
   });
 
   bool get isTechAssigned {
@@ -88,6 +92,8 @@ class CustomerBookingItem {
     'needSpareParts': needSpareParts,
     'bookedTechId': bookedTechId,
     'voiceNoteUrl': voiceNoteUrl,
+    'rating': rating,
+    'ratingCount': ratingCount,
   };
 
   factory CustomerBookingItem.fromJson(Map json) {
@@ -96,13 +102,19 @@ class CustomerBookingItem {
       parsedMedia = List.from(json['mediaUrls']);
     }
 
-    final String? techId = json['bookedTechId'] as String? ?? json['assignedTechnicianId'] as String? ?? json['techId'] as String?;
+    final String? techId = json['bookedTechId'] as String? ?? json['assignedTechnicianId'] as String? ?? json['assignedTechId'] as String? ?? json['techId'] as String?;
     final String? sparePartImg = json['sparePartImageUrl'] as String? ?? json['sparePartBase64'] as String?;
     final bool needSpare = (json['needSpareParts'] as bool?) ?? (sparePartImg != null && sparePartImg.trim().isNotEmpty);
 
-    final rawTechName = json['techName'] as String? ?? json['bookedTechName'] as String? ?? '';
-    final formattedTechName = rawTechName.isNotEmpty
-        ? rawTechName
+    final rawTechName = json['bookedTechName'] as String? ?? json['techName'] as String? ?? json['assignedTechName'] as String? ?? '';
+    final cleanTechName = rawTechName.trim();
+    final bool isGenericTechName = cleanTechName.isEmpty ||
+        cleanTechName.toLowerCase() == 'technician' ||
+        cleanTechName.toLowerCase() == 'tech' ||
+        cleanTechName.toLowerCase() == 'customer';
+
+    final formattedTechName = !isGenericTechName
+        ? cleanTechName
         : (techId != null && techId.isNotEmpty && techId != 'pending'
         ? 'Technician'
         : 'Searching for Technician...');
@@ -121,6 +133,21 @@ class CustomerBookingItem {
     String title = json['serviceName'] ?? json['serviceTitle'] ?? json['title'] ?? 'Home Service';
     String desc = json['description'] ?? json['notes'] ?? 'Task required.';
 
+    final techAvatarUrl = json['bookedTechAvatar'] as String? ??
+        json['techAvatar'] as String? ??
+        json['assignedTechAvatar'] as String? ??
+        '';
+
+    final double parsedRating = (json['techRating'] as num?)?.toDouble() ??
+        (json['technicianRating'] as num?)?.toDouble() ??
+        (json['rating'] as num?)?.toDouble() ??
+        4.8;
+
+    final int parsedRatingCount = (json['ratingCount'] as num?)?.toInt() ??
+        (json['reviewCount'] as num?)?.toInt() ??
+        (json['totalReviews'] as num?)?.toInt() ??
+        15;
+
     return CustomerBookingItem(
       id: json['id'] ?? json['bookingId'] ?? json['requestId'] ?? 'ID # 2145',
       techName: formattedTechName,
@@ -131,13 +158,15 @@ class CustomerBookingItem {
       timeText: json['timeText'] ?? '12:00',
       status: json['status'] ?? 'open',
       isSparePartsPaid: json['isSparePartsPaid'] ?? false,
-      avatarUrl: json['avatarUrl'] ?? json['techAvatar'] ?? '',
+      avatarUrl: techAvatarUrl,
       serviceImageUrl: json['serviceImageUrl'] ?? 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&auto=format&fit=crop&q=60',
       mediaUrls: parsedMedia,
       sparePartImageUrl: sparePartImg,
       needSpareParts: needSpare,
       bookedTechId: techId,
       voiceNoteUrl: json['voiceNoteUrl'] as String? ?? json['audioUrl'] as String?,
+      rating: parsedRating,
+      ratingCount: parsedRatingCount,
     );
   }
 }
@@ -160,6 +189,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   late String _selectedStatusFilter;
 
   bool _isViewingTaskDescription = false;
+  bool _isViewingTechReviews = false;
   CustomerBookingItem? _selectedBooking;
 
   bool _isLoadingSpareParts = false;
@@ -196,6 +226,105 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     return prefs.getString('email') ?? prefs.getString('phoneNumber') ?? 'customer_default';
   }
 
+  Future<Map<String, dynamic>> _fetchTechInfo(CustomerBookingItem booking) async {
+    String name = booking.techName;
+    String avatar = booking.avatarUrl;
+    double rating = booking.rating;
+    int ratingCount = booking.ratingCount;
+
+    final techId = (booking.bookedTechId ?? '').trim();
+    final bool isGenericName = name.isEmpty ||
+        name.toLowerCase() == 'technician' ||
+        name.toLowerCase() == 'tech' ||
+        name.toLowerCase() == 'searching for technician...';
+
+    if (techId.isNotEmpty && techId != 'pending') {
+      try {
+        final doc = await DatabaseService().getTechProfile(techId);
+        if (doc.exists && doc.data() != null) {
+          final data = doc.data()!;
+          final fetchedName = (data['name'] as String? ??
+              data['fullName'] as String? ??
+              data['displayName'] as String? ??
+              '').trim();
+          if (fetchedName.isNotEmpty) {
+            name = fetchedName;
+          }
+
+          final fetchedAvatar = (data['avatarUrl'] as String? ??
+              data['profilePictureUrl'] as String? ??
+              data['photoUrl'] as String? ??
+              '').trim();
+          if (fetchedAvatar.isNotEmpty) {
+            avatar = fetchedAvatar;
+          }
+
+          final num? r = data['rating'] as num? ??
+              data['techRating'] as num? ??
+              data['averageRating'] as num?;
+          if (r != null && r > 0) {
+            rating = r.toDouble();
+          }
+
+          final num? rc = data['ratingCount'] as num? ??
+              data['reviewCount'] as num? ??
+              data['totalReviews'] as num?;
+          if (rc != null && rc >= 0) {
+            ratingCount = rc.toInt();
+          } else if (data['reviews'] is List) {
+            ratingCount = (data['reviews'] as List).length;
+          }
+        }
+      } catch (_) {}
+
+      // Fallback: Check accepted bids for tech details if still missing
+      if (isGenericName || avatar.isEmpty) {
+        try {
+          final userId = await _getUserId();
+          final bidsSnap = await DatabaseService().customerBidsCollection(userId, booking.id).get();
+          for (var bDoc in bidsSnap.docs) {
+            final bData = bDoc.data();
+            final bStatus = (bData['status'] as String? ?? '').toLowerCase();
+            if (bStatus == 'accepted' || bidsSnap.docs.length == 1) {
+              final bidTechName = (bData['techName'] as String? ?? bData['senderName'] as String? ?? '').trim();
+              final bidTechAvatar = (bData['techAvatar'] as String? ?? bData['avatarUrl'] as String? ?? '').trim();
+              final num? bidRating = bData['techRating'] as num? ?? bData['technicianRating'] as num?;
+              if (isGenericName && bidTechName.isNotEmpty && bidTechName.toLowerCase() != 'technician') {
+                name = bidTechName;
+              }
+              if (avatar.isEmpty && bidTechAvatar.isNotEmpty) {
+                avatar = bidTechAvatar;
+              }
+              if (bidRating != null && bidRating > 0) {
+                rating = bidRating.toDouble();
+              }
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Universal avatar lookup fallback if avatar is still empty
+      if (avatar.isEmpty) {
+        try {
+          avatar = await DatabaseService().getUniversalUserAvatar(techId);
+        } catch (_) {}
+      }
+    }
+
+    booking.techName = name;
+    booking.avatarUrl = avatar;
+    booking.rating = rating;
+    booking.ratingCount = ratingCount;
+
+    return {
+      'name': name,
+      'avatar': avatar,
+      'rating': rating,
+      'ratingCount': ratingCount,
+    };
+  }
+
   Future _loadBookingsData() async {
     final userId = await _getUserId();
     final authUser = FirebaseAuth.instance.currentUser;
@@ -226,6 +355,13 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
           final item = CustomerBookingItem.fromJson(data);
           _itemsMap[item.id] = item;
           changed = true;
+
+          // Asynchronously resolve real technician name & avatar
+          if (item.bookedTechId != null && item.bookedTechId!.isNotEmpty && item.bookedTechId != 'pending') {
+            _fetchTechInfo(item).then((_) {
+              if (mounted) setState(() {});
+            });
+          }
         }
       }
 
@@ -1275,6 +1411,10 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
       return const CustomerMainLayout(initialIndex: 1);
     }
 
+    if (_isViewingTechReviews && _selectedBooking != null) {
+      return _buildTechnicianReviewsView(_selectedBooking!);
+    }
+
     if (_isViewingTaskDescription && _selectedBooking != null) {
       return _buildTaskDescriptionView(_selectedBooking!);
     }
@@ -1580,106 +1720,121 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    FutureBuilder<String>(
-                                      future: booking.avatarUrl.isNotEmpty ? Future.value(booking.avatarUrl) : DatabaseService().getUniversalUserAvatar(booking.bookedTechId ?? ''),
-                                      builder: (context, snap) {
-                                        final avatarUrl = snap.data ?? booking.avatarUrl;
-                                        return CircleAvatar(
-                                          radius: 22,
-                                          backgroundImage: avatarUrl.isNotEmpty ? StorageService.getImageProvider(avatarUrl) : null,
-                                          backgroundColor: Colors.grey,
-                                          child: avatarUrl.isEmpty ? const Icon(Icons.person, color: Colors.white, size: 22) : null,
-                                        );
+                                FutureBuilder<Map<String, dynamic>>(
+                                  future: _fetchTechInfo(booking),
+                                  builder: (context, snap) {
+                                    final displayTechName = snap.data?['name'] as String? ?? booking.techName;
+                                    final displayAvatarUrl = snap.data?['avatar'] as String? ?? booking.avatarUrl;
+                                    final displayRating = (snap.data?['rating'] as num?)?.toDouble() ?? booking.rating;
+                                    final displayRatingCount = (snap.data?['ratingCount'] as num?)?.toInt() ?? booking.ratingCount;
+
+                                    return GestureDetector(
+                                      onTap: () {
+                                        if (booking.bookedTechId != null && booking.bookedTechId!.isNotEmpty) {
+                                          setState(() => _isViewingTechReviews = true);
+                                        }
                                       },
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
+                                      child: Row(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            booking.techName,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
+                                          CircleAvatar(
+                                            radius: 22,
+                                            backgroundImage: displayAvatarUrl.isNotEmpty
+                                                ? StorageService.getImageProvider(displayAvatarUrl)
+                                                : null,
+                                            backgroundColor: Colors.grey,
+                                            child: displayAvatarUrl.isEmpty
+                                                ? const Icon(Icons.person, color: Colors.white, size: 22)
+                                                : null,
                                           ),
-                                          const SizedBox(height: 1),
-                                          if (booking.isTechAssigned) ...[
-                                            const Row(
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Icon(Icons.star, color: Color(0xFFFFC107), size: 13),
-                                                SizedBox(width: 2),
                                                 Text(
-                                                  '4.8',
-                                                  style: TextStyle(
+                                                  displayTechName,
+                                                  style: const TextStyle(
                                                     color: Colors.white,
+                                                    fontSize: 15,
                                                     fontWeight: FontWeight.bold,
-                                                    fontSize: 11,
                                                   ),
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
-                                                Text(
-                                                  ' (15)',
-                                                  style: TextStyle(color: Colors.white70, fontSize: 10),
+                                            const SizedBox(height: 1),
+                                            if (booking.isTechAssigned) ...[
+                                              Row(
+                                                children: [
+                                                  const Icon(Icons.star, color: Color(0xFFFFC107), size: 13),
+                                                  const SizedBox(width: 2),
+                                                  Text(
+                                                    displayRating.toStringAsFixed(1),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    ' ($displayRatingCount)',
+                                                    style: const TextStyle(color: Colors.white70, fontSize: 10),
+                                                  ),
+                                                ],
+                                              ),
+                                            ] else ...[
+                                              const Text(
+                                                'Awaiting technician offers',
+                                                style: TextStyle(color: Colors.amberAccent, fontSize: 10.5),
+                                              ),
+                                            ],
+                                            const SizedBox(height: 2),
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.location_on_outlined, color: Colors.white70, size: 12),
+                                                const SizedBox(width: 3),
+                                                Expanded(
+                                                  child: Text(
+                                                    booking.location,
+                                                    style: const TextStyle(color: Colors.white70, fontSize: 10),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
                                                 ),
                                               ],
                                             ),
-                                          ] else ...[
-                                            const Text(
-                                              'Awaiting technician offers',
-                                              style: TextStyle(color: Colors.amberAccent, fontSize: 10.5),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              booking.description,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 9,
+                                                height: 1.15,
+                                              ),
                                             ),
                                           ],
-                                          const SizedBox(height: 2),
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.location_on_outlined, color: Colors.white70, size: 12),
-                                              const SizedBox(width: 3),
-                                              Expanded(
-                                                child: Text(
-                                                  booking.location,
-                                                  style: const TextStyle(color: Colors.white70, fontSize: 10),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            booking.description,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 9,
-                                              height: 1.15,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Image(
-                                        image: StorageService.getImageProvider(booking.serviceImageUrl),
-                                        width: 72,
-                                        height: 68,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) => Container(
-                                          width: 72,
-                                          height: 68,
-                                          color: Colors.grey.shade800,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
+                                      const SizedBox(width: 8),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: Image(
+                                          image: StorageService.getImageProvider(booking.serviceImageUrl),
+                                          width: 72,
+                                          height: 68,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => Container(
+                                            width: 72,
+                                            height: 68,
+                                            color: Colors.grey.shade800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
 
                                 const SizedBox(height: 8),
 
@@ -2317,6 +2472,260 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
               ),
             ),
           ),
+      ],
+    );
+  }
+
+  // --- TECHNICIAN REVIEWS SUBVIEW (MATCHING CUSTOMER OFFERS SCREEN) ---
+  Widget _buildTechnicianReviewsView(CustomerBookingItem booking) {
+    final techId = booking.bookedTechId ?? '';
+    final techName = booking.techName;
+    final avatarUrl = booking.avatarUrl;
+    final rating = booking.rating;
+    final reviewCount = booking.ratingCount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _isViewingTechReviews = false),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: Colors.black,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.chevron_left, color: Colors.white, size: 28),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  techName,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image(
+                          image: StorageService.getImageProvider(avatarUrl),
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            width: 80,
+                            height: 80,
+                            color: Colors.grey.shade800,
+                            child: const Icon(Icons.person, color: Colors.white54, size: 36),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              techName,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Verified Professional Technician',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white70,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.star, color: Color(0xFFFFC107), size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  rating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '($reviewCount reviews)',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+                const Text(
+                  'Customer Reviews',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: techId.isNotEmpty ? DatabaseService().fetchTechReviews(techId) : Future.value([]),
+                  builder: (context, snapshot) {
+                    final reviews = snapshot.data ?? [];
+                    if (reviews.isEmpty) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F8F8),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: const Column(
+                          children: [
+                            Icon(Icons.rate_review_outlined, color: Colors.grey, size: 36),
+                            SizedBox(height: 8),
+                            Text(
+                              'No reviews yet for this technician',
+                              style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F8F8),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: reviews.length,
+                        separatorBuilder: (context, index) => const Divider(height: 24, color: Colors.black12),
+                        itemBuilder: (context, index) {
+                          final r = reviews[index];
+                          final reviewerName = r['userName'] as String? ?? r['name'] as String? ?? 'Customer';
+                          final text = r['comment'] as String? ?? r['text'] as String? ?? 'Great service.';
+                          final dateStr = r['dateText'] as String? ?? r['date'] as String? ?? 'Recently';
+                          final revAvatar = r['userAvatar'] as String? ?? r['avatarUrl'] as String? ?? '';
+
+                          return _buildReviewItem(
+                            name: reviewerName,
+                            date: dateStr,
+                            text: text,
+                            avatarUrl: revAvatar,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReviewItem({
+    required String name,
+    required String date,
+    required String text,
+    String? avatarUrl,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty ? StorageService.getImageProvider(avatarUrl) : null,
+              backgroundColor: Colors.grey,
+              child: avatarUrl == null || avatarUrl.isEmpty ? const Icon(Icons.person, color: Colors.white, size: 18) : null,
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black),
+                ),
+                Row(
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.star, color: Color(0xFFFFC107), size: 14),
+                        Icon(Icons.star, color: Color(0xFFFFC107), size: 14),
+                        Icon(Icons.star, color: Color(0xFFFFC107), size: 14),
+                        Icon(Icons.star, color: Color(0xFFFFC107), size: 14),
+                        Icon(Icons.star, color: Color(0xFFFFC107), size: 14),
+                      ],
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      date,
+                      style: const TextStyle(color: Colors.grey, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          text,
+          style: const TextStyle(fontSize: 13, color: Colors.black87, height: 1.3),
+        ),
       ],
     );
   }
