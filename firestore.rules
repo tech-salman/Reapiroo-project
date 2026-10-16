@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // 1. CUSTOMER BRANCH EXPLICIT PATH RULES
+    // =========================================================================
+
+    // Path: USERS/CUSTOMERS/{customerId}/ACCOUNT DETAILS
+    match /USERS/CUSTOMERS/{customerId}/{accountDoc} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/CUSTOMERS/{customerId}/DATA/BOOKINGS/{bookingId}
+    match /USERS/CUSTOMERS/{customerId}/DATA/BOOKINGS/{bookingId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/CUSTOMERS/{customerId}/DATA/BOOKINGS/{bookingId}/BIDS/{bidId}
+    match /USERS/CUSTOMERS/{customerId}/DATA/BOOKINGS/{bookingId}/BIDS/{bidId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/CUSTOMERS/{customerId}/DATA/CHATS/{chatId}
+    match /USERS/CUSTOMERS/{customerId}/DATA/CHATS/{chatId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/CUSTOMERS/{customerId}/DATA/CHATS/{chatId}/MESSAGES/{messageId}
+    match /USERS/CUSTOMERS/{customerId}/DATA/CHATS/{chatId}/MESSAGES/{messageId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/CUSTOMERS/{customerId}/DATA/NOTIFICATIONS/{notificationId}
+    match /USERS/CUSTOMERS/{customerId}/DATA/NOTIFICATIONS/{notificationId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/CUSTOMERS/{customerId}/DATA/TRANSACTIONS/{transactionId}
+    match /USERS/CUSTOMERS/{customerId}/DATA/TRANSACTIONS/{transactionId} {
+      allow read, write: if true;
+    }
+
+    // =========================================================================
+    // 2. TECHNICIAN BRANCH EXPLICIT PATH RULES
+    // =========================================================================
+
+    // Path: USERS/TECH/{techId}/ACCOUNT DETAILS
+    match /USERS/TECH/{techId}/{accountDoc} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/TECH/{techId}/DATA/REQUESTS/{requestId}
+    match /USERS/TECH/{techId}/DATA/REQUESTS/{requestId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/TECH/{techId}/DATA/REQUESTS/{requestId}/BIDS/{bidId}
+    match /USERS/TECH/{techId}/DATA/REQUESTS/{requestId}/BIDS/{bidId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/TECH/{techId}/DATA/CHATS/{chatId}
+    match /USERS/TECH/{techId}/DATA/CHATS/{chatId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/TECH/{techId}/DATA/CHATS/{chatId}/MESSAGES/{messageId}
+    match /USERS/TECH/{techId}/DATA/CHATS/{chatId}/MESSAGES/{messageId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/TECH/{techId}/DATA/NOTIFICATIONS/{notificationId}
+    match /USERS/TECH/{techId}/DATA/NOTIFICATIONS/{notificationId} {
+      allow read, write: if true;
+    }
+
+    // Path: USERS/TECH/{techId}/DATA/TRANSACTIONS/{transactionId}
+    match /USERS/TECH/{techId}/DATA/TRANSACTIONS/{transactionId} {
+      allow read, write: if true;
+    }
+
+    // =========================================================================
+    // 3. COLLECTION GROUP RULES (Enables collectionGroup queries for all subcollection details)
+    // =========================================================================
+
+    match /{path=**}/{docName} {
+      allow read, write: if true;
+    }
+
+  }
+}

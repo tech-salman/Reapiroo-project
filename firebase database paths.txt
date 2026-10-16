@@ -1,0 +1,54 @@
+customers (collection)
+└── {customerId} (doc)                       ← account details as fields
+    │   name, email, phone, photoUrl, createdAt
+    │
+    ├── bookings (collection)
+    │   └── {bookingId} (doc)                ← booking details as fields
+    │       │   title, description, category, location,
+    │       │   status, acceptedBidId, assignedTechId, createdAt
+    │       │
+    │       └── bids (collection)
+    │           └── {bidId} (doc)            ← bid details as fields
+    │               │   techId, amount, message, status, createdAt
+    │               │
+    │               └── payments (collection)
+    │                   └── {paymentId} (doc)
+    │                           amount, method, status, techId, createdAt
+    │
+    ├── chats (collection)
+    │   └── {chatId} (doc)
+    │       │   techId, bookingId, lastMessage, lastMessageAt
+    │       └── messages (collection)
+    │           └── {messageId} (doc)
+    │                   senderId, text, type, isRead, createdAt
+    │
+    └── notifications (collection)
+        └── {notificationId} (doc)
+                title, body, type, refId, isRead, createdAt
+
+techs (collection)
+└── {techId} (doc)                           ← account details as fields
+    │   name, email, phone, skills[], rating, isAvailable, createdAt
+    │
+    ├── requests (collection)
+    │   └── {requestId} (doc)                ← use the SAME id as bookingId
+    │       │   customerId, title, description, location, status, createdAt
+    │       │
+    │       └── bids (collection)
+    │           └── {bidId} (doc)            ← SAME id as the customer side
+    │               │   customerId, amount, message, status, createdAt
+    │               │
+    │               └── payments (collection)
+    │                   └── {paymentId} (doc) ← SAME id as the customer side
+    │                           amount, method, status, customerId, createdAt
+    │
+    ├── chats (collection)
+    │   └── {chatId} (doc)                   ← SAME id as the customer side
+    │       │   customerId, bookingId, lastMessage, lastMessageAt
+    │       └── messages (collection)
+    │           └── {messageId} (doc)
+    │
+    └── notifications (collection)
+        └── {notificationId} (doc)
+EMAILS_INDEX
+     user catagory, User ID, User email, User phone, user gender                 ← all in one line, list of all users in saperate lines. new field for each user not collection.

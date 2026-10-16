@@ -1,0 +1,21 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    match /user_avatars/{userId}/{allPaths=**} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /tech_documents/{techId}/{allPaths=**} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /request_photos/{requestId}/{allPaths=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

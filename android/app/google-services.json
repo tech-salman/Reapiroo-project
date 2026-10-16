@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "932991373799",
+    "project_id": "reapiroo",
+    "storage_bucket": "reapiroo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:932991373799:android:bdedd586057dfb690e6d42",
+        "android_client_info": {
+          "package_name": "com.reapiroo.reapiroo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "932991373799-3g7n0lrujo8dfr0kgt93ec6j4l3johae.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.reapiroo.reapiroo",
+            "certificate_hash": "5e9c69ab4ef97dfe99af44faf5778477bb03ce8c"
+          }
+        },
+        {
+          "client_id": "932991373799-opmed37qtega15h4a8vb5l2vg9fcvo8a.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBv5ye05Jledafs8sWQ6jS4SuRcrm8LYf4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "932991373799-opmed37qtega15h4a8vb5l2vg9fcvo8a.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "932991373799-ta0q5635brnurn894dova27qpvbmvdn6.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.reapiroo.reapiroo"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
