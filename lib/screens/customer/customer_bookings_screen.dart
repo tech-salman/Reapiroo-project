@@ -1872,7 +1872,62 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
                                 const SizedBox(height: 8),
 
                                 // Action Buttons: Assigned -> Chat / Track / Reschedule. Unassigned -> Offers / Edit
-                                if (booking.isTechAssigned) ...[
+                                if (booking.status.toLowerCase() == 'cancelled' || booking.status.toLowerCase() == 'declined' || booking.status.toLowerCase() == 'rejected') ...[
+                                  if (booking.isTechAssigned) ...[
+                                    // Condition 2: Cancelled after accepting technician offer -> Show Chat only (omit Track on map & Reschedule)
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: GestureDetector(
+                                            onTap: () async {
+                                              final currentCustId = await ChatService.getEffectiveUserId();
+                                              final rawTechId = booking.bookedTechId ?? (booking.techName.isNotEmpty ? booking.techName.toLowerCase().replaceAll(' ', '_') : 'tech_demo');
+                                              final techId = await DatabaseService().resolveCanonicalTechId(rawTechId);
+                                              final customerId = await DatabaseService().resolveUniversalCanonicalId(currentCustId);
+                                              final chatId = ChatService.generateChatId(
+                                                customerId: customerId,
+                                                techId: techId,
+                                                bookingId: booking.id,
+                                              );
+                                              if (!context.mounted) return;
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => CustomerChatDetailScreen(
+                                                    chatId: chatId,
+                                                    peerId: techId,
+                                                    userName: booking.techName.isNotEmpty ? booking.techName : 'Technician',
+                                                    userRole: 'Technician',
+                                                    avatarUrl: booking.avatarUrl,
+                                                    bookingId: booking.id,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            child: Container(
+                                              height: 32,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: const Text(
+                                                'Chat',
+                                                style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Colors.black,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ] else ...[
+                                    // Condition 1: Cancelled before accepting technician offer -> No chat, track on map, reschedule, offers, or edit buttons.
+                                  ],
+                                ] else if (booking.isTechAssigned) ...[
                                   Row(
                                     children: [
                                       Expanded(

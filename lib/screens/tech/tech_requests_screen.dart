@@ -215,7 +215,8 @@ class _TechRequestsScreenState extends State<TechRequestsScreen> {
                 return status == 'accepted' ||
                     status == 'in_progress' ||
                     status == 'booked' ||
-                    status == 'bid_accepted';
+                    status == 'bid_accepted' ||
+                    status == 'pending_customer_confirmation';
               } else if (filterCode == 'completed') {
                 return status == 'completed';
               } else if (filterCode == 'cancelled') {
@@ -281,7 +282,9 @@ class _TechRequestsScreenState extends State<TechRequestsScreen> {
                         ? 'Completed'
                         : ((status == 'cancelled' || status == 'declined' || status == 'rejected')
                             ? 'Cancelled'
-                            : 'In Progress'),
+                            : (status == 'pending_customer_confirmation'
+                                ? 'Pending Confirmation'
+                                : 'In Progress')),
                     dateText: 'Mon, Dec 23',
                     timeText: '12:00',
                     onView: () {

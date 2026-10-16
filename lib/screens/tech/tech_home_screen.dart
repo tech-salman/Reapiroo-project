@@ -590,6 +590,7 @@ class _TechHomeScreenState extends State<TechHomeScreen> {
               status == 'in_progress' ||
               status == 'booked' ||
               status == 'bid_accepted' ||
+              status == 'pending_customer_confirmation' ||
               status == 'completed' ||
               status == 'cancelled' ||
               status == 'declined' ||

@@ -50,119 +50,23 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
   ];
 
   Future<void> _handleAcceptOffer(Map<String, dynamic> offer) async {
-    final offerId = offer['bidId'] as String? ?? offer['offerId'] as String? ?? offer['id'] as String? ?? '';
-    final techId = offer['techId'] as String? ?? offer['technicianId'] as String? ?? '';
-    final techName = offer['techName'] as String? ?? offer['technicianName'] as String? ?? 'Technician';
     final price = (offer['price'] as num?)?.toDouble() ?? (offer['amount'] as num?)?.toDouble() ?? (offer['bidAmount'] as num?)?.toDouble() ?? 150.0;
 
-    try {
-      await _dbService.acceptBid(
-        customerId: _currentUserId,
-        bookingId: widget.requestId,
-        bidId: offerId,
-        techId: techId,
-        amount: price,
-      );
+    setState(() {
+      offer['status'] = 'accepted';
+      if (_selectedTechOffer != null) {
+        _selectedTechOffer!['status'] = 'accepted';
+      }
+    });
 
-      if (!mounted) return;
-      _showJobAcceptedDialog(techName, price);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error accepting offer: $e')),
-      );
-    }
+    if (!mounted) return;
+    _showPaymentPopup(price, offer);
   }
 
-  void _showJobAcceptedDialog(String techName, double price) {
+  void _showPaymentPopup(double effectivePrice, Map<String, dynamic> offer) {
     showDialog(
       context: context,
-      builder: (dialogContext) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        backgroundColor: Colors.white,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check, color: Colors.white, size: 36),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Job Accepted',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Your Job has been successfully accepted by $techName.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Please continue to payment',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              const SizedBox(height: 28),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                    _showPaymentPopup(price);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Pay',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showPaymentPopup(double effectivePrice) {
-    showDialog(
-      context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         backgroundColor: Colors.white,
@@ -215,19 +119,19 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
               _buildPaymentMethodButton(
                 icon: Icons.account_balance_wallet,
                 label: 'Pay via Wallet',
-                onTap: () => _processFinalPayment(effectivePrice, 'Wallet', dialogContext),
+                onTap: () => _processFinalPayment(effectivePrice, 'Wallet', offer, dialogContext),
               ),
               const SizedBox(height: 12),
               _buildPaymentMethodButton(
                 icon: Icons.credit_card,
                 label: 'Pay via Card',
-                onTap: () => _processFinalPayment(effectivePrice, 'Card', dialogContext),
+                onTap: () => _processFinalPayment(effectivePrice, 'Card', offer, dialogContext),
               ),
               const SizedBox(height: 12),
               _buildPaymentMethodButton(
                 icon: Icons.apple,
                 label: 'Apple Pay',
-                onTap: () => _processFinalPayment(effectivePrice, 'Apple Pay', dialogContext),
+                onTap: () => _processFinalPayment(effectivePrice, 'Apple Pay', offer, dialogContext),
               ),
             ],
           ),
@@ -264,15 +168,202 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
     );
   }
 
-  void _processFinalPayment(double amount, String method, BuildContext dialogContext) {
+  Future<void> _processFinalPayment(double amount, String method, Map<String, dynamic> offer, BuildContext dialogContext) async {
     Navigator.pop(dialogContext);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Payment of AED ${amount.toStringAsFixed(2)} completed successfully via $method!')),
+
+    final offerId = offer['bidId'] as String? ?? offer['offerId'] as String? ?? offer['id'] as String? ?? '';
+    final techId = offer['techId'] as String? ?? offer['technicianId'] as String? ?? '';
+
+    if (method == 'Wallet') {
+      try {
+        final custDoc = await _dbService.getCustomerProfile(_currentUserId);
+        final availableBalance = (custDoc.data()?['walletBalance'] as num?)?.toDouble() ?? 0.0;
+
+        if (availableBalance < amount) {
+          if (!mounted) return;
+          _showPaymentFailedDialog(availableBalance, amount);
+          return;
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error checking wallet balance: $e')),
+        );
+        return;
+      }
+    }
+
+    try {
+      await _dbService.acceptBid(
+        customerId: _currentUserId,
+        bookingId: widget.requestId,
+        bidId: offerId,
+        techId: techId,
+        amount: amount,
+      );
+
+      if (!mounted) return;
+      _showPaymentSuccessDialog(amount, method);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Payment/Acceptance error: $e')),
+      );
+    }
+  }
+
+  void _showPaymentFailedDialog(double availableBalance, double requiredAmount) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: Colors.white,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 36),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Payment Not Done',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.black,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Payment is not done due to not enough balance in your wallet.\n\nAvailable Balance: AED ${availableBalance.toStringAsFixed(2)}\nRequired Amount: AED ${requiredAmount.toStringAsFixed(2)}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'OK',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const CustomerMainLayout(initialIndex: 1)),
-      (route) => false,
+  }
+
+  void _showPaymentSuccessDialog(double amount, String method) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: Colors.white,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, color: Colors.white, size: 36),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Payment Done',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.black,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Payment of AED ${amount.toStringAsFixed(2)} completed successfully via $method!\nYour job has been successfully booked.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => const CustomerMainLayout(initialIndex: 1)),
+                      (route) => false,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'View Bookings',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -910,6 +1001,7 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
     final rating = (offer['rating'] as num?)?.toDouble() ?? 5.0;
     final reviewCount = (offer['reviewCount'] as num?)?.toInt() ?? 0;
     final avatarUrl = offer['avatarUrl'] as String? ?? offer['techAvatar'] as String? ?? '';
+    final status = offer['status'] as String? ?? 'pending';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1134,11 +1226,10 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
 
                 const SizedBox(height: 24),
 
-                // Bottom Action Buttons: Accept & Bid
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
+                // Bottom Action Buttons: Accept to pay (or Accept & Bid)
+                status == 'accepted'
+                    ? SizedBox(
+                        width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
                           onPressed: () => _handleAcceptOffer(offer),
@@ -1158,35 +1249,59 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SizedBox(
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: () => _showBidBottomSheet(offer),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE5E5EA),
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                      )
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 52,
+                              child: ElevatedButton(
+                                onPressed: () => _handleAcceptOffer(offer),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: const Text(
+                                  'Accept',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             ),
-                            elevation: 0,
                           ),
-                          child: const Text(
-                            'Bid',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SizedBox(
+                              height: 52,
+                              child: ElevatedButton(
+                                onPressed: () => _showBidBottomSheet(offer),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFE5E5EA),
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: const Text(
+                                  'Bid',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
 
                 const SizedBox(height: 80),
               ],

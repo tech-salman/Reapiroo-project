@@ -191,53 +191,83 @@ class OfferCard extends StatelessWidget {
                           ],
                         ),
                         const Spacer(),
-                        SizedBox(
-                          height: 36,
-                          child: ElevatedButton(
-                            onPressed: isCustomerBid ? null : onAccept,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isCustomerBid ? Colors.grey.shade700 : Colors.white,
-                              foregroundColor: isCustomerBid ? Colors.white38 : Colors.black,
-                              disabledBackgroundColor: Colors.grey.shade700,
-                              disabledForegroundColor: Colors.white38,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                        status == 'accepted'
+                            ? SizedBox(
+                                height: 36,
+                                child: ElevatedButton(
+                                  onPressed: isCustomerBid ? null : onAccept,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isCustomerBid ? Colors.grey.shade700 : Colors.white,
+                                    foregroundColor: isCustomerBid ? Colors.white38 : Colors.black,
+                                    disabledBackgroundColor: Colors.grey.shade700,
+                                    disabledForegroundColor: Colors.white38,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Accept',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    height: 36,
+                                    child: ElevatedButton(
+                                      onPressed: isCustomerBid ? null : onAccept,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: isCustomerBid ? Colors.grey.shade700 : Colors.white,
+                                        foregroundColor: isCustomerBid ? Colors.white38 : Colors.black,
+                                        disabledBackgroundColor: Colors.grey.shade700,
+                                        disabledForegroundColor: Colors.white38,
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Accept',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  SizedBox(
+                                    height: 36,
+                                    child: ElevatedButton(
+                                      onPressed: onBid,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFE5E5EA),
+                                        foregroundColor: Colors.black,
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Bid',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                            child: const Text(
-                              'Accept',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        SizedBox(
-                          height: 36,
-                          child: ElevatedButton(
-                            onPressed: onBid,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFE5E5EA),
-                              foregroundColor: Colors.black,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Text(
-                              'Bid',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                     secondChild: Column(
@@ -267,10 +297,9 @@ class OfferCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: SizedBox(
+                        status == 'accepted'
+                            ? SizedBox(
+                                width: double.infinity,
                                 height: 36,
                                 child: ElevatedButton(
                                   onPressed: isCustomerBid ? null : onAccept,
@@ -293,35 +322,62 @@ class OfferCard extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: SizedBox(
-                                height: 36,
-                                child: ElevatedButton(
-                                  onPressed: onBid,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFE5E5EA),
-                                    foregroundColor: Colors.black,
-                                    elevation: 0,
-                                    padding: EdgeInsets.zero,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                              )
+                            : Row(
+                                children: [
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: ElevatedButton(
+                                        onPressed: isCustomerBid ? null : onAccept,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: isCustomerBid ? Colors.grey.shade700 : Colors.white,
+                                          foregroundColor: isCustomerBid ? Colors.white38 : Colors.black,
+                                          disabledBackgroundColor: Colors.grey.shade700,
+                                          disabledForegroundColor: Colors.white38,
+                                          elevation: 0,
+                                          padding: EdgeInsets.zero,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Accept',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                  child: const Text(
-                                    'Bid',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 36,
+                                      child: ElevatedButton(
+                                        onPressed: onBid,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFE5E5EA),
+                                          foregroundColor: Colors.black,
+                                          elevation: 0,
+                                          padding: EdgeInsets.zero,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Bid',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   ),
