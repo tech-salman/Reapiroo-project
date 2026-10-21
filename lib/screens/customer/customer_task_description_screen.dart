@@ -6,23 +6,22 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/services/permission_service.dart';
 import 'package:reapiroo/widgets/custom_bottom_nav_bar.dart';
 import 'package:reapiroo/screens/customer/customer_main_layout.dart';
 import 'package:reapiroo/screens/customer/customer_offers_screen.dart';
-import 'package:reapiroo/screens/customer/customer_bookings_screen.dart';
-import 'package:reapiroo/services/database_service.dart';
 import 'package:reapiroo/services/chat_service.dart';
-import 'package:reapiroo/services/auth_service.dart';
 import 'package:reapiroo/services/storage_service.dart';
 
-class CustomerTaskDescriptionScreen extends StatefulWidget {
+class CustomerTaskDescriptionScreen extends ConsumerStatefulWidget {
   final String serviceName;
   final String? imageUrl;
   final bool embedInShell;
@@ -37,15 +36,13 @@ class CustomerTaskDescriptionScreen extends StatefulWidget {
   });
 
   @override
-  State<CustomerTaskDescriptionScreen> createState() =>
+  ConsumerState<CustomerTaskDescriptionScreen> createState() =>
       _CustomerTaskDescriptionScreenState();
 }
 
 class _CustomerTaskDescriptionScreenState
-    extends State<CustomerTaskDescriptionScreen> {
+    extends ConsumerState<CustomerTaskDescriptionScreen> {
   final TextEditingController _descriptionController = TextEditingController();
-  final DatabaseService _dbService = DatabaseService();
-  final AuthService _authService = AuthService();
   final ImagePicker _picker = ImagePicker();
 
   // State
@@ -437,7 +434,9 @@ class _CustomerTaskDescriptionScreenState
 
   Future<void> _saveLocationToUserAccountInFirebase(String address, double lat, double lng) async {
     try {
-      final user = _authService.currentUser;
+      final authService = ref.read(authServiceProvider);
+      final dbService = ref.read(databaseServiceProvider);
+      final user = authService.currentUser;
       final prefs = await SharedPreferences.getInstance();
       final uid = user?.uid;
       final phoneKey = prefs.getString('phoneNumber');
@@ -451,11 +450,11 @@ class _CustomerTaskDescriptionScreenState
       };
 
       if (uid != null && uid.isNotEmpty) {
-        await _dbService.updateCustomerProfile(uid, locationData);
+        await dbService.updateCustomerProfile(uid, locationData);
       }
 
       if (phoneKey != null && phoneKey.isNotEmpty) {
-        await _dbService.updateCustomerProfile(phoneKey, locationData);
+        await dbService.updateCustomerProfile(phoneKey, locationData);
       }
 
       await prefs.setDouble('user_latitude', lat);
@@ -470,21 +469,23 @@ class _CustomerTaskDescriptionScreenState
     String? lastMapLocation;
 
     try {
+      final authService = ref.read(authServiceProvider);
+      final dbService = ref.read(databaseServiceProvider);
       final prefs = await SharedPreferences.getInstance();
       final phoneKey = prefs.getString('phoneNumber');
-      final user = _authService.currentUser;
+      final user = authService.currentUser;
       final uid = user?.uid;
 
       // 1. Fetch saved addresses from Firestore / SharedPreferences
       List<dynamic>? rawAddresses;
       if (uid != null && uid.isNotEmpty) {
-        final doc = await _dbService.getCustomerProfile(uid);
+        final doc = await dbService.getCustomerProfile(uid);
         if (doc.exists && doc.data() != null) {
           rawAddresses = doc.data()!['savedAddresses'] as List<dynamic>?;
         }
       }
       if (rawAddresses == null && phoneKey != null && phoneKey.isNotEmpty) {
-        final doc = await _dbService.getCustomerProfile(phoneKey);
+        final doc = await dbService.getCustomerProfile(phoneKey);
         if (doc.exists && doc.data() != null) {
           rawAddresses = doc.data()!['savedAddresses'] as List<dynamic>?;
         }
@@ -509,13 +510,13 @@ class _CustomerTaskDescriptionScreenState
 
       // 2. Fetch last used map location
       if (uid != null && uid.isNotEmpty) {
-        final doc = await _dbService.getCustomerProfile(uid);
+        final doc = await dbService.getCustomerProfile(uid);
         if (doc.exists && doc.data() != null) {
           lastMapLocation = doc.data()!['address']?.toString() ?? doc.data()!['lastMapLocation']?.toString();
         }
       }
       if ((lastMapLocation == null || lastMapLocation.isEmpty) && phoneKey != null && phoneKey.isNotEmpty) {
-        final doc = await _dbService.getCustomerProfile(phoneKey);
+        final doc = await dbService.getCustomerProfile(phoneKey);
         if (doc.exists && doc.data() != null) {
           lastMapLocation = doc.data()!['address']?.toString() ?? doc.data()!['lastMapLocation']?.toString();
         }
@@ -757,7 +758,9 @@ class _CustomerTaskDescriptionScreenState
               try {
                 final prefs = await SharedPreferences.getInstance();
                 final phoneKey = prefs.getString('phoneNumber');
-                final user = _authService.currentUser;
+                final authService = ref.read(authServiceProvider);
+                final dbService = ref.read(databaseServiceProvider);
+                final user = authService.currentUser;
                 final uid = user?.uid;
 
                 List<dynamic> rawAddresses = [];
@@ -769,10 +772,10 @@ class _CustomerTaskDescriptionScreenState
                 await prefs.setString('customer_saved_addresses_json', json.encode(rawAddresses));
 
                 if (uid != null && uid.isNotEmpty) {
-                  await _dbService.updateCustomerProfile(uid, {'savedAddresses': rawAddresses});
+                  await dbService.updateCustomerProfile(uid, {'savedAddresses': rawAddresses});
                 }
                 if (phoneKey != null && phoneKey.isNotEmpty) {
-                  await _dbService.updateCustomerProfile(phoneKey, {'savedAddresses': rawAddresses});
+                  await dbService.updateCustomerProfile(phoneKey, {'savedAddresses': rawAddresses});
                 }
               } catch (_) {}
 
@@ -784,23 +787,6 @@ class _CustomerTaskDescriptionScreenState
         ],
       ),
     );
-  }
-
-  Future<void> _addFirestoreBooking(CustomerBookingItem booking) async {
-    try {
-      final user = _authService.currentUser;
-      final prefs = await SharedPreferences.getInstance();
-      final userId = user?.uid ?? prefs.getString('phoneNumber') ?? 'customer_default';
-
-      await _dbService.createRequest(
-        customerId: userId,
-        customerName: prefs.getString('firstName') ?? 'Customer',
-        title: booking.serviceName,
-        description: booking.description,
-        address: booking.location,
-        price: 150.0,
-      );
-    } catch (_) {}
   }
 
   // --- 3. Location Handling ---
@@ -913,7 +899,9 @@ class _CustomerTaskDescriptionScreenState
     });
 
     try {
-      final user = _authService.currentUser;
+      final authService = ref.read(authServiceProvider);
+      final dbService = ref.read(databaseServiceProvider);
+      final user = authService.currentUser;
       final prefs = await SharedPreferences.getInstance();
       final customerId = await ChatService.getEffectiveUserId();
       final customerName = prefs.getString('cust_firstName') ??
@@ -965,7 +953,7 @@ class _CustomerTaskDescriptionScreenState
       }
 
       // Create request in backend Firestore
-      final requestId = await _dbService.createRequest(
+      final requestId = await dbService.createRequest(
         customerId: customerId,
         customerName: customerName,
         title: widget.serviceName,

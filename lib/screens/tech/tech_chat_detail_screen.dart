@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:reapiroo/models/chat_model.dart';
-import 'package:reapiroo/services/chat_service.dart';
-import 'package:reapiroo/services/storage_service.dart';
-import 'package:reapiroo/services/database_service.dart';
-import 'package:reapiroo/screens/tech/tech_notification_screen.dart';
-import 'package:reapiroo/widgets/booking_card.dart';
-import 'package:reapiroo/widgets/notification_bell_button.dart';
 
-class TechChatDetailScreen extends StatefulWidget {
+import '../../models/chat_model.dart';
+import '../../providers/chat_provider.dart';
+import '../../providers/services_providers.dart';
+import '../../services/chat_service.dart';
+import '../../services/storage_service.dart';
+import '../../widgets/booking_card.dart';
+import '../../widgets/notification_bell_button.dart';
+import 'tech_notification_screen.dart';
+
+class TechChatDetailScreen extends ConsumerStatefulWidget {
   final String chatId;
   final String peerId;
   final String userName;
@@ -28,10 +30,10 @@ class TechChatDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<TechChatDetailScreen> createState() => _TechChatDetailScreenState();
+  ConsumerState<TechChatDetailScreen> createState() => _TechChatDetailScreenState();
 }
 
-class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
+class _TechChatDetailScreenState extends ConsumerState<TechChatDetailScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ChatService _chatService = ChatService();
@@ -59,9 +61,10 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
 
   Future<void> _initChatAsync() async {
     final prefs = await SharedPreferences.getInstance();
+    final dbService = ref.read(databaseServiceProvider);
     final userId = await ChatService.getEffectiveUserId();
-    final techId = await DatabaseService().resolveCanonicalTechId(userId);
-    final customerId = (_effectivePeerId == 'Reapiroo service') ? 'Reapiroo service' : await DatabaseService().resolveUniversalCanonicalId(_effectivePeerId);
+    final techId = await dbService.resolveCanonicalTechId(userId);
+    final customerId = (_effectivePeerId == 'Reapiroo service') ? 'Reapiroo service' : await dbService.resolveUniversalCanonicalId(_effectivePeerId);
 
     final fname = prefs.getString('firstName') ?? prefs.getString('tech_firstName') ?? 'Technician';
     final lname = prefs.getString('lastName') ?? prefs.getString('tech_lastName') ?? '';
@@ -79,11 +82,11 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
     }
 
     if (_effectiveAvatar.isEmpty && customerId.isNotEmpty) {
-      _effectiveAvatar = await DatabaseService().getUniversalUserAvatar(customerId);
+      _effectiveAvatar = await dbService.getUniversalUserAvatar(customerId);
     }
 
     try {
-      _chatService.getOrCreateChatThread(
+      await _chatService.getOrCreateChatThread(
         chatId: _effectiveChatId,
         customerId: customerId,
         techId: techId,
@@ -93,7 +96,7 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
         techName: _currentUserName,
       );
 
-      _chatService.markMessagesAsRead(_effectiveChatId, techId, isTech: true);
+      await _chatService.markMessagesAsRead(_effectiveChatId, techId, isTech: true);
     } catch (_) {}
 
     if (mounted) setState(() {});
@@ -106,14 +109,20 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
     super.dispose();
   }
 
-  void _sendMessage() async {
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
+  }
+
+  Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty || _effectiveChatId.isEmpty) return;
+    if (text.isEmpty) return;
 
     _messageController.clear();
 
     try {
-      await _chatService.sendMessage(
+      await ref.read(chatControllerProvider.notifier).sendMessage(
         chatId: _effectiveChatId,
         senderId: _currentUserId,
         receiverId: _effectivePeerId,
@@ -122,125 +131,69 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
         customerId: _effectivePeerId,
         techId: _currentUserId,
       );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send message: $e')),
-        );
-      }
-    }
-
-    _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
+    final messagesAsync = ref.watch(chatMessagesStreamProvider(_effectiveChatId));
+
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(70),
-        child: SafeArea(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-            ),
-            child: Row(
-              children: [
-                // Back Button (Black circle with chevron left icon)
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: const BoxDecoration(
-                      color: Colors.black,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.chevron_left,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Avatar
-                CircleAvatar(
-                  radius: 22,
-                  backgroundImage: _effectiveAvatar.isNotEmpty ? StorageService.getImageProvider(_effectiveAvatar) : null,
-                  backgroundColor: Colors.grey.shade300,
-                  child: _effectiveAvatar.isEmpty ? const Icon(Icons.person, color: Colors.grey, size: 22) : null,
-                ),
-                const SizedBox(width: 12),
-                // Name & Subtitle Role
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.userName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        widget.userRole,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Notification Bell Icon
-                NotificationBellButton(
-                  isTech: true,
-                  backgroundColor: Colors.black,
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const TechNotificationScreen()),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leadingWidth: 40,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
+          onPressed: () => Navigator.pop(context),
         ),
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundImage: _effectiveAvatar.isNotEmpty ? StorageService.getImageProvider(_effectiveAvatar) : null,
+              backgroundColor: Colors.grey.shade300,
+              child: _effectiveAvatar.isEmpty ? const Icon(Icons.person, color: Colors.grey, size: 20) : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.userName,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
+                  const Text(
+                    'Active Now',
+                    style: TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          NotificationBellButton(
+            isTech: true,
+            backgroundColor: Colors.transparent,
+            iconColor: Colors.black,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TechNotificationScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
-          // Real-time Messages Stream (Pre-loaded instantly from local cache)
+          const Divider(color: Color(0xFFE5E5EA), height: 1),
           Expanded(
-            child: StreamBuilder<List<ChatMessageModel>>(
-              stream: _chatService.getMessagesStream(_effectiveChatId, currentUserId: _currentUserId.isNotEmpty ? _currentUserId : 'temp_user', isTech: true),
-              builder: (context, snapshot) {
-                final messages = snapshot.data ?? [];
-
-                if (messages.isEmpty && snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Colors.black));
-                }
-
+            child: messagesAsync.when(
+              data: (messages) {
                 if (messages.isEmpty) {
                   return Center(
                     child: Column(
@@ -270,6 +223,8 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
                   },
                 );
               },
+              loading: () => const Center(child: CircularProgressIndicator(color: Colors.black)),
+              error: (err, _) => Center(child: Text('Error loading messages: $err', style: const TextStyle(color: Colors.grey))),
             ),
           ),
 
@@ -281,7 +236,6 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
               top: false,
               child: Row(
                 children: [
-                  // White Pill Text Input
                   Expanded(
                     child: Container(
                       height: 48,
@@ -305,7 +259,6 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // White Circle Send Button
                   GestureDetector(
                     onTap: _sendMessage,
                     child: Container(
@@ -315,13 +268,7 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
                         color: Colors.white,
                         shape: BoxShape.circle,
                       ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.send_rounded,
-                          color: Colors.black,
-                          size: 20,
-                        ),
-                      ),
+                      child: const Icon(Icons.send, color: Colors.black, size: 20),
                     ),
                   ),
                 ],
@@ -334,132 +281,47 @@ class _TechChatDetailScreenState extends State<TechChatDetailScreen> {
   }
 
   Widget _buildMessageBubble(ChatMessageModel msg) {
+    final bool isMe = msg.senderId == _currentUserId || msg.isMe;
+
     if (msg.isBookingCard) {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 12.0),
-        child: Align(
-          alignment: msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
-          child: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.82,
-            child: BookingCard(
-              techName: msg.techName.isNotEmpty ? msg.techName : 'Technician',
-              id: msg.bookingId.isNotEmpty ? (msg.bookingId.length > 6 ? msg.bookingId.substring(0, 6).toUpperCase() : msg.bookingId) : '',
-              location: msg.location,
-              description: msg.description,
-              serviceImageUrl: msg.serviceImageUrl,
-              dateText: msg.dateText.isNotEmpty ? msg.dateText : 'Mon, Dec 23',
-              timeText: msg.timeText.isNotEmpty ? msg.timeText : '12:00',
-              status: msg.status.isNotEmpty ? msg.status : 'Assigned',
-              serviceName: msg.serviceName.isNotEmpty ? msg.serviceName : 'Service',
-              badgeText: msg.badgeText.isNotEmpty ? msg.badgeText : 'Booking',
-              onView: () {},
-            ),
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Center(
+          child: BookingCard(
+            techName: msg.techName.isNotEmpty ? msg.techName : 'Technician',
+            id: msg.bookingId.isNotEmpty ? msg.bookingId : 'Booking',
+            location: msg.location.isNotEmpty ? msg.location : 'Location',
+            description: msg.description.isNotEmpty ? msg.description : 'Service Request',
+            serviceImageUrl: msg.serviceImageUrl,
+            dateText: msg.dateText.isNotEmpty ? msg.dateText : 'Today',
+            timeText: msg.timeText.isNotEmpty ? msg.timeText : 'Now',
+            status: msg.status.isNotEmpty ? msg.status : 'Booked',
+            serviceName: msg.serviceName.isNotEmpty ? msg.serviceName : 'Service Request',
+            badgeText: msg.badgeText.isNotEmpty ? msg.badgeText : 'Booked',
+            onView: () {},
           ),
         ),
       );
     }
 
-    if (msg.isMe) {
-      // Outgoing Message (Right aligned, Light Grey Bubble)
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12.0),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.72,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF7F7F8),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE5E5EA), width: 1),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  msg.text,
-                  style: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 14,
-                    height: 1.35,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                if (msg.time.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    msg.time,
-                    style: const TextStyle(
-                      color: Colors.black38,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.black : const Color(0xFFF1F1F3),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(
+          msg.text,
+          style: TextStyle(
+            color: isMe ? Colors.white : Colors.black,
+            fontSize: 15,
           ),
         ),
-      );
-    } else {
-      // Incoming Message (Left aligned with small Avatar, Pure Black Bubble)
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundImage: _effectiveAvatar.isNotEmpty ? StorageService.getImageProvider(_effectiveAvatar) : null,
-              backgroundColor: Colors.grey.shade300,
-              child: _effectiveAvatar.isEmpty ? const Icon(Icons.person, color: Colors.grey, size: 18) : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.75,
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        msg.text,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          height: 1.4,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                      if (msg.time.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          msg.time,
-                          style: const TextStyle(
-                            color: Colors.white60,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+      ),
+    );
   }
 }

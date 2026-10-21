@@ -205,6 +205,9 @@ class ChatThreadModel {
     this.unreadCount = 0,
   });
 
+  String get peerName => techName.isNotEmpty && techName != 'Technician' ? techName : customerName;
+  String get peerAvatar => techAvatar.isNotEmpty ? techAvatar : customerAvatar;
+
   Map<String, dynamic> toMap() {
     return {
       'chatId': chatId,

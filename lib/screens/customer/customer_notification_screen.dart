@@ -1,133 +1,31 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:reapiroo/services/database_service.dart';
-import 'package:reapiroo/widgets/notification_card.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class CustomerNotificationItem {
-  final String id;
-  final String title;
-  final String message;
-  final String time;
-  final IconData icon;
-  final Color iconColor;
-  final String category; // 'Orders', 'Promos', 'System'
-  final String dateGroup;
-  bool isRead;
+import '../../providers/notification_provider.dart';
+import '../../widgets/notification_card.dart';
 
-  CustomerNotificationItem({
-    required this.id,
-    required this.title,
-    required this.message,
-    required this.time,
-    required this.icon,
-    required this.iconColor,
-    required this.category,
-    required this.dateGroup,
-    this.isRead = false,
-  });
-}
-
-class CustomerNotificationScreen extends StatefulWidget {
+class CustomerNotificationScreen extends ConsumerStatefulWidget {
   const CustomerNotificationScreen({super.key});
 
   @override
-  State<CustomerNotificationScreen> createState() => _CustomerNotificationScreenState();
+  ConsumerState<CustomerNotificationScreen> createState() => _CustomerNotificationScreenState();
 }
 
-class _CustomerNotificationScreenState extends State<CustomerNotificationScreen> {
+class _CustomerNotificationScreenState extends ConsumerState<CustomerNotificationScreen> {
   String _selectedFilter = 'All';
-  List<CustomerNotificationItem> _notifications = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _listenNotifications();
-  }
-
-  Future<void> _listenNotifications() async {
-    final prefs = await SharedPreferences.getInstance();
-    final Set<String> userCandidates = {};
-
-    final authUid = FirebaseAuth.instance.currentUser?.uid;
-    if (authUid != null && authUid.trim().isNotEmpty) {
-      userCandidates.add(authUid.trim());
-    }
-
-    final phone = prefs.getString('phoneNumber') ?? prefs.getString('phone');
-    if (phone != null && phone.trim().isNotEmpty) {
-      final clean = phone.replaceAll(RegExp(r'\D'), '');
-      userCandidates.add(clean);
-      userCandidates.add('92$clean');
-      if (clean.startsWith('92')) userCandidates.add(clean.substring(2));
-    }
-
-    final email = prefs.getString('email') ?? FirebaseAuth.instance.currentUser?.email;
-    if (email != null && email.trim().isNotEmpty) {
-      userCandidates.add(email.trim().toLowerCase());
-    }
-
-    final primaryId = userCandidates.isNotEmpty ? userCandidates.first : '';
-
-    DatabaseService().streamUserNotifications(primaryId).listen((snap) {
-      final loaded = snap.docs.where((doc) {
-        final data = doc.data();
-        final recipientId = data['recipientId'] as String? ?? data['userId'] as String? ?? '';
-        final path = doc.reference.path;
-        if (userCandidates.isNotEmpty) {
-          return userCandidates.contains(recipientId) ||
-              userCandidates.any((cand) => path.contains(cand));
-        }
-        return true;
-      }).map((doc) {
-        final data = doc.data();
-        final type = data['type'] as String? ?? 'system';
-        return CustomerNotificationItem(
-          id: doc.id,
-          title: data['title'] as String? ?? 'Notification',
-          message: data['body'] as String? ?? data['description'] as String? ?? '',
-          time: 'Recently',
-          icon: type == 'booking' || type == 'bid' ? Icons.check_circle_rounded : Icons.notifications_rounded,
-          iconColor: const Color(0xFF2F80ED),
-          category: type == 'booking' || type == 'bid' ? 'Orders' : 'System',
-          dateGroup: 'Today',
-          isRead: data['isRead'] as bool? ?? false,
-        );
-      }).toList();
-
-      if (mounted) {
-        setState(() {
-          _notifications = loaded;
-        });
-      }
-    });
-  }
-
-  List<CustomerNotificationItem> get _filteredNotifications {
-    if (_selectedFilter == 'All') return _notifications;
-    return _notifications.where((n) => n.category == _selectedFilter).toList();
-  }
-
-  void _markAllAsRead() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      for (var item in _notifications) {
-        DatabaseService().markNotificationAsRead(uid, item.id);
-      }
-    }
-    setState(() {
-      for (var item in _notifications) {
-        item.isRead = true;
-      }
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('All notifications marked as read.')),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
-    final displayList = _filteredNotifications;
+    final notifsAsync = ref.watch(notificationsStreamProvider);
+    final notifications = notifsAsync.asData?.value ?? [];
+
+    final filteredList = notifications.where((n) {
+      if (_selectedFilter == 'All') return true;
+      if (_selectedFilter == 'Orders') {
+        return n.type == 'booking' || n.type == 'bid';
+      }
+      return n.type == _selectedFilter.toLowerCase();
+    }).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -163,7 +61,19 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
                   ),
                   const Spacer(),
                   TextButton(
-                    onPressed: _markAllAsRead,
+                    onPressed: () async {
+                      final controller = ref.read(notificationControllerProvider.notifier);
+                      for (var n in notifications) {
+                        if (!n.isRead) {
+                          await controller.markNotificationRead(n.id);
+                        }
+                      }
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('All notifications marked as read.')),
+                        );
+                      }
+                    },
                     child: const Text(
                       'Read all',
                       style: TextStyle(
@@ -213,7 +123,7 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
 
             // Notifications List
             Expanded(
-              child: displayList.isEmpty
+              child: filteredList.isEmpty
                   ? Center(
                       child: Text(
                         'No notifications',
@@ -222,20 +132,19 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      itemCount: displayList.length,
+                      itemCount: filteredList.length,
                       itemBuilder: (context, index) {
-                        final item = displayList[index];
+                        final item = filteredList[index];
+                        final isBooking = item.type == 'booking' || item.type == 'bid';
                         return NotificationCard(
                           title: item.title,
-                          message: item.message,
+                          message: item.description,
                           time: item.time,
-                          icon: item.icon,
-                          iconColor: item.iconColor,
+                          icon: isBooking ? Icons.check_circle_rounded : Icons.notifications_rounded,
+                          iconColor: const Color(0xFF2F80ED),
                           isRead: item.isRead,
                           onTap: () {
-                            setState(() {
-                              item.isRead = true;
-                            });
+                            ref.read(notificationControllerProvider.notifier).markNotificationRead(item.id);
                           },
                         );
                       },
@@ -246,5 +155,4 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
       ),
     );
   }
-
 }

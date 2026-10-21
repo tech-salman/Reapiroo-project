@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/screens/customer/customer_notification_screen.dart';
 import 'package:reapiroo/screens/customer/customer_main_layout.dart';
 import 'package:reapiroo/screens/customer/customer_chat_detail_screen.dart';
@@ -171,7 +173,7 @@ class CustomerBookingItem {
   }
 }
 
-class CustomerBookingsScreen extends StatefulWidget {
+class CustomerBookingsScreen extends ConsumerStatefulWidget {
   final String? initialFilter;
   final bool embedInShell;
 
@@ -182,10 +184,10 @@ class CustomerBookingsScreen extends StatefulWidget {
   });
 
   @override
-  State<CustomerBookingsScreen> createState() => _CustomerBookingsScreenState();
+  ConsumerState<CustomerBookingsScreen> createState() => _CustomerBookingsScreenState();
 }
 
-class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
+class _CustomerBookingsScreenState extends ConsumerState<CustomerBookingsScreen> {
   late String _selectedStatusFilter;
 
   bool _isViewingTaskDescription = false;
@@ -240,7 +242,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
 
     if (techId.isNotEmpty && techId != 'pending') {
       try {
-        final doc = await DatabaseService().getTechProfile(techId);
+        final dbService = ref.read(databaseServiceProvider);
+        final doc = await dbService.getTechProfile(techId);
         if (doc.exists && doc.data() != null) {
           final data = doc.data()!;
           final fetchedName = (data['name'] as String? ??
@@ -281,7 +284,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
       if (isGenericName || avatar.isEmpty) {
         try {
           final userId = await _getUserId();
-          final bidsSnap = await DatabaseService().customerBidsCollection(userId, booking.id).get();
+          final dbService = ref.read(databaseServiceProvider);
+          final bidsSnap = await dbService.customerBidsCollection(userId, booking.id).get();
           for (var bDoc in bidsSnap.docs) {
             final bData = bDoc.data();
             final bStatus = (bData['status'] as String? ?? '').toLowerCase();
@@ -307,7 +311,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
       // Universal avatar lookup fallback if avatar is still empty
       if (avatar.isEmpty) {
         try {
-          avatar = await DatabaseService().getUniversalUserAvatar(techId);
+          avatar = await ref.read(databaseServiceProvider).getUniversalUserAvatar(techId);
         } catch (_) {}
       }
     }
@@ -385,7 +389,8 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
     _sub2?.cancel();
     _sub3?.cancel();
 
-    _sub1 = DatabaseService().customerBookingsCollection(userId)
+    final dbService = ref.read(databaseServiceProvider);
+    _sub1 = dbService.customerBookingsCollection(userId)
         .snapshots()
         .listen((snap) => updateSnapshotDocs(snap.docs));
   }
@@ -394,7 +399,7 @@ class _CustomerBookingsScreenState extends State<CustomerBookingsScreen> {
   Future _updateFirestoreBooking(CustomerBookingItem booking) async {
     try {
       if (booking.id.isNotEmpty && !booking.id.startsWith('ID #')) {
-        await DatabaseService().updateRequestStatus(booking.id, booking.status);
+        await ref.read(databaseServiceProvider).updateRequestStatus(booking.id, booking.status);
       }
     } catch (_) {}
   }

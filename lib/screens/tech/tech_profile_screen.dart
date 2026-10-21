@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,9 +7,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:reapiroo/screens/onboarding_screen.dart';
-import 'package:reapiroo/services/database_service.dart';
+import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/services/storage_service.dart';
+import 'package:reapiroo/screens/onboarding_screen.dart';
 import 'tech_main_layout.dart';
 
 enum ProfileSubView {
@@ -21,7 +22,7 @@ enum ProfileSubView {
   helpContactUs,
 }
 
-class TechProfileScreen extends StatefulWidget {
+class TechProfileScreen extends ConsumerStatefulWidget {
   final bool embedInShell;
 
   const TechProfileScreen({
@@ -30,7 +31,7 @@ class TechProfileScreen extends StatefulWidget {
   });
 
   @override
-  State<TechProfileScreen> createState() => _TechProfileScreenState();
+  ConsumerState<TechProfileScreen> createState() => _TechProfileScreenState();
 }
 
 class ReviewData {
@@ -49,7 +50,7 @@ class ReviewData {
   });
 }
 
-class _TechProfileScreenState extends State<TechProfileScreen> {
+class _TechProfileScreenState extends ConsumerState<TechProfileScreen> {
   ProfileSubView _activeView = ProfileSubView.main;
 
   // My Profile Form Controllers
@@ -81,7 +82,6 @@ class _TechProfileScreenState extends State<TechProfileScreen> {
 
   // Reviews state
   String _selectedStarFilter = 'All';
-  final DatabaseService _dbService = DatabaseService();
 
   final List<ReviewData> _allReviews = [];
 
@@ -183,8 +183,9 @@ class _TechProfileScreenState extends State<TechProfileScreen> {
         await prefs.setString('profile_photo_url', uploadedUrl);
 
         final phoneKey = prefs.getString('phoneNumber');
+        final dbService = ref.read(databaseServiceProvider);
         if (phoneKey != null && phoneKey.isNotEmpty) {
-          await _dbService.updateTechProfile(phoneKey, {'avatarUrl': uploadedUrl});
+          await dbService.updateTechProfile(phoneKey, {'avatarUrl': uploadedUrl});
         }
 
         if (mounted) {
@@ -225,18 +226,19 @@ class _TechProfileScreenState extends State<TechProfileScreen> {
 
     final phoneKey = prefs.getString('phoneNumber') ?? firebaseUser?.phoneNumber ?? '';
     final uid = firebaseUser?.uid ?? '';
+    final dbService = ref.read(databaseServiceProvider);
 
     // 1. Try Firestore fetch
     DocumentSnapshot<Map<String, dynamic>>? doc;
     if (uid.isNotEmpty) {
       try {
-        final snap = await _dbService.getTechProfile(uid);
+        final snap = await dbService.getTechProfile(uid);
         if (snap.exists && snap.data() != null) doc = snap;
       } catch (_) {}
     }
     if (doc == null && phoneKey.isNotEmpty) {
       try {
-        final snap = await _dbService.getTechProfile(phoneKey);
+        final snap = await dbService.getTechProfile(phoneKey);
         if (snap.exists && snap.data() != null) doc = snap;
       } catch (_) {}
     }
@@ -266,7 +268,7 @@ class _TechProfileScreenState extends State<TechProfileScreen> {
       final parsedReviews = <ReviewData>[];
       try {
         final targetDocId = doc.id;
-        final reviewsSnap = await _dbService.techReviewsCollection(targetDocId).get();
+        final reviewsSnap = await dbService.techReviewsCollection(targetDocId).get();
         for (var rdoc in reviewsSnap.docs) {
           final r = rdoc.data();
           parsedReviews.add(ReviewData(
@@ -457,7 +459,7 @@ class _TechProfileScreenState extends State<TechProfileScreen> {
     };
 
     try {
-      await _dbService.updateTechProfile(phoneKey, updateData);
+      await ref.read(databaseServiceProvider).updateTechProfile(phoneKey, updateData);
     } catch (_) {}
 
     await prefs.setString('tech_firstName', _firstNameController.text.trim());
@@ -635,7 +637,7 @@ class _TechProfileScreenState extends State<TechProfileScreen> {
     final uid = firebaseUser?.uid ?? '';
 
     final searchKey = uid.isNotEmpty ? uid : (phoneKey.isNotEmpty ? phoneKey : 'tech_demo');
-    final rawList = await _dbService.fetchTechReviews(searchKey);
+    final rawList = await ref.read(databaseServiceProvider).fetchTechReviews(searchKey);
 
     final parsedReviews = <ReviewData>[];
     final Set<String> seenReviewIds = {};

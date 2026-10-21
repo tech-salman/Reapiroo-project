@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/services/chat_service.dart';
 import 'package:reapiroo/services/database_service.dart';
 import 'package:reapiroo/screens/tech/tech_main_layout.dart';
@@ -13,7 +15,7 @@ import 'package:reapiroo/screens/tech/tech_chat_detail_screen.dart';
 import 'package:reapiroo/widgets/custom_bottom_nav_bar.dart';
 import 'package:reapiroo/widgets/task_description_card.dart';
 
-class TaskDescriptionScreen extends StatefulWidget {
+class TaskDescriptionScreen extends ConsumerStatefulWidget {
   final String? requestId;
   final int initialIndex;
 
@@ -24,11 +26,10 @@ class TaskDescriptionScreen extends StatefulWidget {
   });
 
   @override
-  State<TaskDescriptionScreen> createState() => _TaskDescriptionScreenState();
+  ConsumerState<TaskDescriptionScreen> createState() => _TaskDescriptionScreenState();
 }
 
-class _TaskDescriptionScreenState extends State<TaskDescriptionScreen> {
-  final DatabaseService _dbService = DatabaseService();
+class _TaskDescriptionScreenState extends ConsumerState<TaskDescriptionScreen> {
   late int _currentNavIndex;
 
   String _customerName = 'Customer';
@@ -93,7 +94,7 @@ class _TaskDescriptionScreenState extends State<TaskDescriptionScreen> {
           final custId = rawCustId.isNotEmpty ? rawCustId : 'cust_demo';
           if (custId.isNotEmpty) {
             try {
-              final custDoc = await _dbService.getCustomerProfile(custId);
+              final custDoc = await ref.read(databaseServiceProvider).getCustomerProfile(custId);
               if (custDoc.exists && custDoc.data() != null) {
                 fetchedAvatar = custDoc.data()!['avatarUrl'] as String? ?? '';
               }
@@ -281,7 +282,7 @@ class _TaskDescriptionScreenState extends State<TaskDescriptionScreen> {
                             try {
                               final chatService = ChatService();
                               final targetBookingId = widget.requestId ?? '';
-                              final messagesSnap = await _dbService.techMessagesCollection(techId, chatId)
+                              final messagesSnap = await ref.read(databaseServiceProvider).techMessagesCollection(techId, chatId)
                                   .where('isBookingCard', isEqualTo: true)
                                   .get();
 
@@ -421,12 +422,13 @@ class _TaskDescriptionScreenState extends State<TaskDescriptionScreen> {
   Future<void> _markTaskAsDone() async {
     if (widget.requestId != null && widget.requestId!.isNotEmpty) {
       try {
+        final dbService = ref.read(databaseServiceProvider);
         // Set status to pending_customer_confirmation instead of completed
-        await _dbService.updateRequestStatus(widget.requestId!, 'pending_customer_confirmation');
+        await dbService.updateRequestStatus(widget.requestId!, 'pending_customer_confirmation');
 
         // Send notification to customer to confirm task completion
         if (customerId.isNotEmpty) {
-          await _dbService.addNotification(
+          await dbService.addNotification(
             recipientId: customerId,
             title: 'Task Completion Pending Confirmation',
             description: 'The technician has marked "$_serviceName" as done. Please review and confirm the task is completed.',
@@ -523,7 +525,7 @@ class _TaskDescriptionScreenState extends State<TaskDescriptionScreen> {
                             final messenger = ScaffoldMessenger.of(context);
                             if (widget.requestId != null && widget.requestId!.isNotEmpty) {
                               try {
-                                await _dbService.updateRequestStatus(widget.requestId!, 'cancelled');
+                                await ref.read(databaseServiceProvider).updateRequestStatus(widget.requestId!, 'cancelled');
                               } catch (_) {}
                             }
                             final prefs = await SharedPreferences.getInstance();
@@ -620,7 +622,7 @@ class _TaskDescriptionScreenState extends State<TaskDescriptionScreen> {
     // use _currentUserId if available, else a fast async lookup isn't possible in a sync build method easily.
     // wait, we can just omit techId or use a FutureBuilder. We'll use collectionGroup fallback if empty.
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _dbService.streamBidsForBooking(reqId, techId: _currentTechId.isNotEmpty ? _currentTechId : null),
+      stream: ref.read(databaseServiceProvider).streamBidsForBooking(reqId, techId: _currentTechId.isNotEmpty ? _currentTechId : null),
       builder: (context, snapshot) {
         final rawDocs = snapshot.data?.docs ?? [];
         final cleanWId = reqId.replaceAll('ID #', '').trim();
@@ -852,7 +854,7 @@ class _TaskDescriptionScreenState extends State<TaskDescriptionScreen> {
   }
 }
 
-class _BidNegotiationContent extends StatefulWidget {
+class _BidNegotiationContent extends ConsumerStatefulWidget {
   final String requestId;
   final String serviceName;
 
@@ -862,13 +864,12 @@ class _BidNegotiationContent extends StatefulWidget {
   });
 
   @override
-  State<_BidNegotiationContent> createState() => _BidNegotiationContentState();
+  ConsumerState<_BidNegotiationContent> createState() => _BidNegotiationContentState();
 }
 
 enum _BidStage { entering, waiting }
 
-class _BidNegotiationContentState extends State<_BidNegotiationContent> {
-  final DatabaseService _dbService = DatabaseService();
+class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> {
   String _enteredAmount = '';
   _BidStage _stage = _BidStage.entering;
   bool _isSubmitting = false;
@@ -896,11 +897,10 @@ class _BidNegotiationContentState extends State<_BidNegotiationContent> {
 
     if (id.isEmpty || id == 'demo_request_id') {
       try {
-        final authUser = FirebaseAuth.instance.currentUser;
-        final prefs = await SharedPreferences.getInstance();
         final techId = _currentTechId.isNotEmpty ? _currentTechId : 'tech_demo';
+        final dbService = ref.read(databaseServiceProvider);
         
-        final reqSnap = await _dbService.techRequestsCollection(techId).get();
+        final reqSnap = await dbService.techRequestsCollection(techId).get();
         if (reqSnap.docs.isNotEmpty) {
           final data = reqSnap.docs.last.data();
           id = data['bookingId'] as String? ?? data['requestId'] as String? ?? reqSnap.docs.last.id;
@@ -942,7 +942,8 @@ class _BidNegotiationContentState extends State<_BidNegotiationContent> {
     });
 
     try {
-      await _dbService.submitBid(
+      final dbService = ref.read(databaseServiceProvider);
+      await dbService.submitBid(
         bookingId: targetRequestId,
         techId: techId,
         techName: techName,
@@ -983,8 +984,9 @@ class _BidNegotiationContentState extends State<_BidNegotiationContent> {
       final prefs = await SharedPreferences.getInstance();
       final currentTechId = authUser?.uid ?? prefs.getString('phoneNumber') ?? prefs.getString('email') ?? techId;
       final techName = authUser?.displayName ?? prefs.getString('firstName') ?? prefs.getString('tech_firstName') ?? 'Technician';
+      final dbService = ref.read(databaseServiceProvider);
 
-      await _dbService.submitBid(
+      await dbService.submitBid(
         bookingId: targetRequestId,
         techId: currentTechId,
         techName: techName,
@@ -995,7 +997,7 @@ class _BidNegotiationContentState extends State<_BidNegotiationContent> {
         status: 'accepted',
       );
 
-      await _dbService.updateBidStatus(
+      await dbService.updateBidStatus(
         bookingId: targetRequestId,
         techId: currentTechId,
         customerId: '',
@@ -1026,8 +1028,9 @@ class _BidNegotiationContentState extends State<_BidNegotiationContent> {
       final prefs = await SharedPreferences.getInstance();
       final currentTechId = authUser?.uid ?? prefs.getString('phoneNumber') ?? prefs.getString('email') ?? techId;
       final techName = authUser?.displayName ?? prefs.getString('firstName') ?? prefs.getString('tech_firstName') ?? 'Technician';
+      final dbService = ref.read(databaseServiceProvider);
 
-      await _dbService.submitBid(
+      await dbService.submitBid(
         bookingId: targetRequestId,
         techId: currentTechId,
         techName: techName,
@@ -1038,7 +1041,7 @@ class _BidNegotiationContentState extends State<_BidNegotiationContent> {
         status: 'declined',
       );
 
-      await _dbService.updateBidStatus(
+      await dbService.updateBidStatus(
         bookingId: targetRequestId,
         techId: currentTechId,
         customerId: '',
@@ -1190,7 +1193,7 @@ class _BidNegotiationContentState extends State<_BidNegotiationContent> {
 
         // Stream real-time bids for this booking
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _dbService.streamBidsForBooking(targetRequestId, techId: currentTechId),
+          stream: ref.read(databaseServiceProvider).streamBidsForBooking(targetRequestId, techId: currentTechId),
           builder: (context, snapshot) {
             final rawDocs = snapshot.data?.docs ?? [];
             final cleanWId = targetRequestId.replaceAll('ID #', '').trim();

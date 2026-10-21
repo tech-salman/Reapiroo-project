@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:reapiroo/models/chat_model.dart';
 import 'package:reapiroo/services/chat_service.dart';
@@ -8,7 +8,7 @@ import 'package:reapiroo/services/database_service.dart';
 import 'package:reapiroo/screens/customer/customer_notification_screen.dart';
 import 'package:reapiroo/widgets/booking_card.dart';
 
-class CustomerChatDetailScreen extends StatefulWidget {
+class CustomerChatDetailScreen extends ConsumerStatefulWidget {
   final String chatId;
   final String peerId;
   final String userName;
@@ -27,10 +27,10 @@ class CustomerChatDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<CustomerChatDetailScreen> createState() => _CustomerChatDetailScreenState();
+  ConsumerState<CustomerChatDetailScreen> createState() => _CustomerChatDetailScreenState();
 }
 
-class _CustomerChatDetailScreenState extends State<CustomerChatDetailScreen> {
+class _CustomerChatDetailScreenState extends ConsumerState<CustomerChatDetailScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ChatService _chatService = ChatService();

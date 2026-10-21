@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/widgets/custom_bottom_nav_bar.dart';
 import 'package:reapiroo/screens/customer/customer_main_layout.dart';
 import 'package:reapiroo/services/database_service.dart';
@@ -7,7 +9,7 @@ import 'package:reapiroo/services/storage_service.dart';
 import 'package:reapiroo/services/chat_service.dart';
 import 'package:reapiroo/widgets/offer_card.dart';
 
-class CustomerOffersScreen extends StatefulWidget {
+class CustomerOffersScreen extends ConsumerStatefulWidget {
   final String requestId;
   final String serviceName;
   final bool embedInShell;
@@ -20,12 +22,11 @@ class CustomerOffersScreen extends StatefulWidget {
   });
 
   @override
-  State<CustomerOffersScreen> createState() => _CustomerOffersScreenState();
+  ConsumerState<CustomerOffersScreen> createState() => _CustomerOffersScreenState();
 }
 
-class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
+class _CustomerOffersScreenState extends ConsumerState<CustomerOffersScreen> {
   String _selectedSort = 'Lowest price';
-  final DatabaseService _dbService = DatabaseService();
   final int _currentNavIndex = 0; // Home tab
   Map<String, dynamic>? _selectedTechOffer;
 
@@ -174,9 +175,10 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
     final offerId = offer['bidId'] as String? ?? offer['offerId'] as String? ?? offer['id'] as String? ?? '';
     final techId = offer['techId'] as String? ?? offer['technicianId'] as String? ?? '';
 
+    final dbService = ref.read(databaseServiceProvider);
     if (method == 'Wallet') {
       try {
-        final custDoc = await _dbService.getCustomerProfile(_currentUserId);
+        final custDoc = await dbService.getCustomerProfile(_currentUserId);
         final availableBalance = (custDoc.data()?['walletBalance'] as num?)?.toDouble() ?? 0.0;
 
         if (availableBalance < amount) {
@@ -194,7 +196,7 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
     }
 
     try {
-      await _dbService.acceptBid(
+      await dbService.acceptBid(
         customerId: _currentUserId,
         bookingId: widget.requestId,
         bidId: offerId,
@@ -370,7 +372,7 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
   Stream<QuerySnapshot<Map<String, dynamic>>> _getOffersStream() {
     final cleanWId = widget.requestId.replaceAll('ID #', '').trim();
     if (_currentUserId.isNotEmpty && cleanWId.isNotEmpty) {
-      return _dbService.customerBidsCollection(_currentUserId, cleanWId).snapshots();
+      return ref.read(databaseServiceProvider).customerBidsCollection(_currentUserId, cleanWId).snapshots();
     }
     return Stream.empty();
   }
@@ -431,7 +433,7 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
                     child: _currentUserId.isEmpty 
                         ? const Center(child: CircularProgressIndicator(color: Colors.black))
                         : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: _dbService.streamBidsForBooking(widget.requestId, customerId: _currentUserId),
+                      stream: ref.read(databaseServiceProvider).streamBidsForBooking(widget.requestId, customerId: _currentUserId),
                       builder: (context, snapshot) {
                         final rawDocs = snapshot.data?.docs ?? [];
                         final cleanWId = widget.requestId.replaceAll('ID #', '').trim();
@@ -647,7 +649,7 @@ class _CustomerOffersScreenState extends State<CustomerOffersScreen> {
                               setSheetState(() => isSubmitting = true);
 
                               try {
-                                await _dbService.submitBid(
+                                await ref.read(databaseServiceProvider).submitBid(
                                   bookingId: widget.requestId,
                                   techId: offerTechId,
                                   techName: techName,

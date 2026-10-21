@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:reapiroo/screens/customer/customer_wallet_screen.dart';
-import 'package:reapiroo/screens/customer/customer_notification_screen.dart';
-import 'package:reapiroo/screens/customer/customer_task_description_screen.dart';
-import 'package:reapiroo/widgets/customer_drawer.dart';
-import 'package:reapiroo/widgets/service_card.dart';
-import 'package:reapiroo/widgets/notification_bell_button.dart';
-import 'package:reapiroo/widgets/app_info_cards_scroll_view.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'customer_wallet_screen.dart';
+import 'customer_notification_screen.dart';
+import 'customer_task_description_screen.dart';
+import '../../widgets/customer_drawer.dart';
+import '../../widgets/service_card.dart';
+import '../../widgets/notification_bell_button.dart';
+import '../../widgets/app_info_cards_scroll_view.dart';
 
 class ServiceItem {
   final String name;
@@ -14,7 +16,7 @@ class ServiceItem {
   const ServiceItem({required this.name, required this.imageUrl});
 }
 
-class CustomerHomeScreen extends StatefulWidget {
+class CustomerHomeScreen extends ConsumerStatefulWidget {
   final bool embedInShell;
 
   const CustomerHomeScreen({
@@ -23,10 +25,10 @@ class CustomerHomeScreen extends StatefulWidget {
   });
 
   @override
-  State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
+  ConsumerState<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
 }
 
-class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
   bool _showAllServices = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -359,7 +361,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       );
                     },
                   ),
-                // Bottom padding to clear the curved nav bar floating above
                 const SizedBox(height: 110),
               ],
             ),
@@ -379,9 +380,4 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       body: SafeArea(child: mainContent),
     );
   }
-
-  Widget _buildSmallCard(String title, String date, IconData icon, String text) {
-    return Container();
-  }
-
 }

@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:reapiroo/screens/customer/customer_home_screen.dart';
-import 'package:reapiroo/screens/customer/customer_bookings_screen.dart';
-import 'package:reapiroo/screens/customer/customer_chat_screen.dart';
-import 'package:reapiroo/screens/customer/customer_profile_screen.dart';
-import 'package:reapiroo/widgets/custom_bottom_nav_bar.dart';
-import 'package:reapiroo/widgets/customer_drawer.dart';
-import 'package:reapiroo/widgets/realtime_alert_listener.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class CustomerMainLayout extends StatefulWidget {
+import 'customer_home_screen.dart';
+import 'customer_bookings_screen.dart';
+import 'customer_chat_screen.dart';
+import 'customer_profile_screen.dart';
+import '../../widgets/custom_bottom_nav_bar.dart';
+import '../../widgets/customer_drawer.dart';
+import '../../widgets/realtime_alert_listener.dart';
+
+class CustomerMainLayout extends ConsumerStatefulWidget {
   final int initialIndex;
 
   const CustomerMainLayout({
@@ -16,10 +18,10 @@ class CustomerMainLayout extends StatefulWidget {
   });
 
   @override
-  State<CustomerMainLayout> createState() => _CustomerMainLayoutState();
+  ConsumerState<CustomerMainLayout> createState() => _CustomerMainLayoutState();
 }
 
-class _CustomerMainLayoutState extends State<CustomerMainLayout> {
+class _CustomerMainLayoutState extends ConsumerState<CustomerMainLayout> {
   late int _currentIndex;
 
   static const List<CustomNavItem> _navItems = [

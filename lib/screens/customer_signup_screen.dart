@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:reapiroo/screens/customer/customer_main_layout.dart';
-import 'package:reapiroo/services/database_service.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class CustomerSignupScreen extends StatefulWidget {
+import '../providers/services_providers.dart';
+import 'customer/customer_main_layout.dart';
+
+class CustomerSignupScreen extends ConsumerStatefulWidget {
   const CustomerSignupScreen({super.key});
 
   @override
-  State<CustomerSignupScreen> createState() => _CustomerSignupScreenState();
+  ConsumerState<CustomerSignupScreen> createState() => _CustomerSignupScreenState();
 }
 
-class _CustomerSignupScreenState extends State<CustomerSignupScreen> {
+class _CustomerSignupScreenState extends ConsumerState<CustomerSignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   String? _selectedGender;
-  final DatabaseService _dbService = DatabaseService();
 
   @override
   void initState() {
@@ -179,6 +180,7 @@ class _CustomerSignupScreenState extends State<CustomerSignupScreen> {
                         onPressed: () async {
                           if (_formKey.currentState!.validate()) {
                             final navigator = Navigator.of(context);
+                            final dbService = ref.read(databaseServiceProvider);
                             final prefs = await SharedPreferences.getInstance();
                             final rawPhone = _phoneController.text.trim();
                             final normalizedNumber = rawPhone.startsWith('0') ? rawPhone.substring(1) : rawPhone;
@@ -189,7 +191,7 @@ class _CustomerSignupScreenState extends State<CustomerSignupScreen> {
                             final googlePhoto = prefs.getString('google_photo_url') ?? '';
                             final profilePhoto = prefs.getString('profile_photo_url') ?? googlePhoto;
 
-                            await _dbService.saveUserByPhone(
+                            await dbService.saveUserByPhone(
                               phoneNumber: phoneKey,
                               role: 'customer',
                               name: fullName,

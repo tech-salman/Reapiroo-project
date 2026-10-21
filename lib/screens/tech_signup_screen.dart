@@ -1,30 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:reapiroo/services/permission_service.dart';
-import 'package:reapiroo/screens/onboarding_screen.dart';
-import 'package:reapiroo/screens/role_selection_screen.dart';
-import 'package:reapiroo/screens/tech/tech_main_layout.dart';
-import 'package:reapiroo/services/database_service.dart';
-import 'package:reapiroo/services/storage_service.dart';
 
-class TechSignupScreen extends StatefulWidget {
+import '../providers/services_providers.dart';
+import '../services/permission_service.dart';
+import '../services/storage_service.dart';
+import 'onboarding_screen.dart';
+import 'role_selection_screen.dart';
+import 'tech/tech_main_layout.dart';
+
+class TechSignupScreen extends ConsumerStatefulWidget {
   const TechSignupScreen({super.key});
 
   @override
-  State<TechSignupScreen> createState() => _TechSignupScreenState();
+  ConsumerState<TechSignupScreen> createState() => _TechSignupScreenState();
 }
 
-class _TechSignupScreenState extends State<TechSignupScreen> {
+class _TechSignupScreenState extends ConsumerState<TechSignupScreen> {
   int _currentStep = 0;
   final List<String> _steps = ['Personal', 'Services', 'Details', 'Documents'];
 
   // Form Controllers
   final TextEditingController _firstNameController = TextEditingController();
-  final DatabaseService _dbService = DatabaseService();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -106,8 +106,6 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
     super.dispose();
   }
 
-  // --- STEP VALIDATION RULES ---
-
   bool _isStepValid(int stepIndex) {
     switch (stepIndex) {
       case 0: // Personal
@@ -130,6 +128,7 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
   bool get _isCurrentStepValid => _isStepValid(_currentStep);
 
   Future<void> _saveTechData() async {
+    final dbService = ref.read(databaseServiceProvider);
     final prefs = await SharedPreferences.getInstance();
     final rawPhone = _phoneController.text.trim();
     final normalizedNumber = rawPhone.startsWith('0') ? rawPhone.substring(1) : rawPhone;
@@ -145,7 +144,7 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
     final googlePhoto = prefs.getString('google_photo_url') ?? '';
     final profilePhoto = prefs.getString('profile_photo_url') ?? googlePhoto;
 
-    await _dbService.saveUserByPhone(
+    await dbService.saveUserByPhone(
       phoneNumber: phoneKey,
       role: 'tech',
       name: fullName,
@@ -202,7 +201,6 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
       _isApprovalPending = true;
     });
 
-    // Start 3-second timer for redirection
     Timer(const Duration(seconds: 3), () {
       if (mounted) {
         Navigator.pushAndRemoveUntil(
@@ -259,7 +257,6 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
       body: Column(
         children: [
           const SizedBox(height: 20),
-          // Step Progress Bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Container(
@@ -315,7 +312,6 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
               child: _buildCurrentStepContent(),
             ),
           ),
-          // Next Button
           Padding(
             padding: const EdgeInsets.all(24.0),
             child: SizedBox(
@@ -566,8 +562,6 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
     );
   }
 
-  // --- HELPER WIDGETS ---
-
   Widget _buildInputBox({
     required TextEditingController controller,
     required String hintText,
@@ -693,6 +687,8 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
 
   Future<void> _pickDocument(String title) async {
     final messenger = ScaffoldMessenger.of(context);
+    final storageService = ref.read(storageServiceProvider);
+
     try {
       final bool hasPermission = await PermissionService.requestMediaPermission(
         context,
@@ -706,7 +702,7 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
       final bytes = await image.readAsBytes();
       if (bytes.isEmpty) return;
 
-      final savedPath = await StorageService().compressAndEncodeBase64Bytes(bytes);
+      final savedPath = await storageService.compressAndEncodeBase64Bytes(bytes);
 
       if (title == 'Profile Picture') {
         final prefs = await SharedPreferences.getInstance();
@@ -727,10 +723,9 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
         );
       }
 
-      // Background upload attempt to Firebase Storage with strict 3-second timeout
       final rawPhone = _phoneController.text.trim();
       final uid = rawPhone.isNotEmpty ? '92$rawPhone' : 'tech_signup_${DateTime.now().millisecondsSinceEpoch}';
-      StorageService().uploadVerificationDocumentXFile(
+      storageService.uploadVerificationDocumentXFile(
         uid: uid,
         xfile: image,
         fileName: title,
@@ -771,7 +766,6 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
       ),
       child: Row(
         children: [
-          // Preview thumbnail when image is uploaded
           if (isUploaded)
             Container(
               width: 46,
@@ -793,7 +787,6 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
                 ),
               ),
             ),
-          // Expanded text section to prevent horizontal overflows
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -834,7 +827,6 @@ class _TechSignupScreenState extends State<TechSignupScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          // Upload / Change Button with fixed padding to save space
           ElevatedButton(
             onPressed: () => _pickDocument(title),
             style: ElevatedButton.styleFrom(

@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:reapiroo/screens/login_signup_screen.dart';
-import 'package:reapiroo/screens/role_selection_screen.dart';
-import 'package:reapiroo/screens/tech/tech_main_layout.dart';
-import 'package:reapiroo/screens/customer/customer_main_layout.dart';
 
-class OnboardingScreen extends StatefulWidget {
+import '../providers/auth_provider.dart';
+import 'login_signup_screen.dart';
+import 'role_selection_screen.dart';
+import 'tech/tech_main_layout.dart';
+import 'customer/customer_main_layout.dart';
+
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
@@ -44,6 +47,67 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       image: 'assets/images/onb_tech.png',
     ),
   ];
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _onNextPressed() async {
+    if (_currentPage < _pages.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      final navigator = Navigator.of(context);
+      final currentUser = ref.read(currentFirebaseUserProvider);
+
+      if (currentUser != null) {
+        final roleAsync = ref.read(userRoleProvider);
+        final role = roleAsync.asData?.value ?? '';
+
+        if (role == 'tech' || role == 'technician') {
+          navigator.pushReplacement(
+            MaterialPageRoute(builder: (context) => const TechMainLayout()),
+          );
+        } else if (role == 'customer') {
+          navigator.pushReplacement(
+            MaterialPageRoute(builder: (context) => const CustomerMainLayout()),
+          );
+        } else {
+          navigator.pushReplacement(
+            MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+          );
+        }
+      } else {
+        final prefs = await SharedPreferences.getInstance();
+        final bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+
+        if (isLoggedIn) {
+          final String role = prefs.getString('userRole') ?? '';
+          if (role == 'tech' || role == 'technician') {
+            navigator.pushReplacement(
+              MaterialPageRoute(builder: (context) => const TechMainLayout()),
+            );
+          } else if (role == 'customer') {
+            navigator.pushReplacement(
+              MaterialPageRoute(builder: (context) => const CustomerMainLayout()),
+            );
+          } else {
+            navigator.pushReplacement(
+              MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
+            );
+          }
+        } else {
+          navigator.pushReplacement(
+            MaterialPageRoute(builder: (context) => const LoginSignupScreen()),
+          );
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -163,39 +227,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         }),
                       ),
                       GestureDetector(
-                        onTap: () async {
-                          if (_currentPage < _pages.length - 1) {
-                            _pageController.nextPage(
-                              duration: const Duration(milliseconds: 500),
-                              curve: Curves.easeInOut,
-                            );
-                          } else {
-                            final navigator = Navigator.of(context);
-                            final prefs = await SharedPreferences.getInstance();
-                            final bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-
-                            if (isLoggedIn) {
-                              final String role = prefs.getString('userRole') ?? '';
-                              if (role == 'tech') {
-                                navigator.pushReplacement(
-                                  MaterialPageRoute(builder: (context) => const TechMainLayout()),
-                                );
-                              } else if (role == 'customer') {
-                                navigator.pushReplacement(
-                                  MaterialPageRoute(builder: (context) => const CustomerMainLayout()),
-                                );
-                              } else {
-                                navigator.pushReplacement(
-                                  MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
-                                );
-                              }
-                            } else {
-                              navigator.pushReplacement(
-                                MaterialPageRoute(builder: (context) => const LoginSignupScreen()),
-                              );
-                            }
-                          }
-                        },
+                        onTap: _onNextPressed,
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(

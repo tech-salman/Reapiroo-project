@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:reapiroo/screens/tech/task_description_screen.dart';
-import 'package:reapiroo/screens/tech/tech_notification_screen.dart';
-import 'package:reapiroo/screens/tech/tech_main_layout.dart';
-import 'package:reapiroo/widgets/request_card.dart';
-import 'package:reapiroo/services/database_service.dart';
-import 'package:reapiroo/widgets/notification_bell_button.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'task_description_screen.dart';
+import 'tech_notification_screen.dart';
+import 'tech_main_layout.dart';
+import '../../widgets/request_card.dart';
+import '../../widgets/notification_bell_button.dart';
+import '../../providers/booking_provider.dart';
 
-class TechRequestsScreen extends StatefulWidget {
+class TechRequestsScreen extends ConsumerStatefulWidget {
   final String? initialFilter;
   final bool embedInShell;
 
@@ -20,10 +18,10 @@ class TechRequestsScreen extends StatefulWidget {
   });
 
   @override
-  State<TechRequestsScreen> createState() => _TechRequestsScreenState();
+  ConsumerState<TechRequestsScreen> createState() => _TechRequestsScreenState();
 }
 
-class _TechRequestsScreenState extends State<TechRequestsScreen> {
+class _TechRequestsScreenState extends ConsumerState<TechRequestsScreen> {
   late String _selectedStatusFilter;
 
   @override
@@ -169,143 +167,106 @@ class _TechRequestsScreenState extends State<TechRequestsScreen> {
     );
   }
 
-  Future<String> _getTechId() async {
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser != null && authUser.uid.isNotEmpty) {
-      return authUser.uid;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('phoneNumber') ?? prefs.getString('email') ?? '';
-  }
-
-  // --- STREAM BOOKINGS FROM FIREBASE (ONLY ACCEPTED REQUESTS AFTER BID) ---
+  // --- STREAM BOOKINGS FROM RIVERPAD ---
   Widget _buildBookingsStream() {
-    return FutureBuilder<String>(
-      future: _getTechId(),
-      builder: (context, techIdSnap) {
-        final currentTechId = techIdSnap.data ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+    final bookingsAsync = ref.watch(techAssignedBookingsProvider);
 
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: currentTechId.isNotEmpty 
-              ? DatabaseService().techRequestsCollection(currentTechId).snapshots()
-              : const Stream.empty(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24.0),
-                  child: CircularProgressIndicator(color: Colors.black),
+    return bookingsAsync.when(
+      data: (bookings) {
+        final filterCode = _currentFilterCode;
+        final filteredList = bookings.where((booking) {
+          final status = booking.status.toLowerCase();
+          if (filterCode == 'in_progress') {
+            return status == 'accepted' ||
+                status == 'in_progress' ||
+                status == 'booked' ||
+                status == 'bid_accepted' ||
+                status == 'pending_customer_confirmation';
+          } else if (filterCode == 'completed') {
+            return status == 'completed';
+          } else if (filterCode == 'cancelled') {
+            return status == 'cancelled' || status == 'declined' || status == 'rejected';
+          }
+          return status == filterCode;
+        }).toList();
+
+        if (filteredList.isEmpty) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9F9FB),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE5E5EA)),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.assignment_outlined, size: 44, color: Colors.black38),
+                const SizedBox(height: 10),
+                Text(
+                  'No $_selectedStatusFilter Bookings',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black),
                 ),
-              );
-            }
-
-            final docs = snapshot.data?.docs ?? [];
-            final filteredDocs = docs.where((doc) {
-              final data = doc.data();
-              final status = (data['status'] as String? ?? 'open').toLowerCase();
-              final bookedTechId = data['bookedTechId'] as String? ?? data['assignedTechnicianId'] as String? ?? '';
-
-              // Match current technician ID if booked by a specific tech
-              if (currentTechId.isNotEmpty && bookedTechId.isNotEmpty && bookedTechId != currentTechId && bookedTechId != 'tech_demo') {
-                return false;
-              }
-
-              final filterCode = _currentFilterCode;
-              if (filterCode == 'in_progress') {
-                return status == 'accepted' ||
-                    status == 'in_progress' ||
-                    status == 'booked' ||
-                    status == 'bid_accepted' ||
-                    status == 'pending_customer_confirmation';
-              } else if (filterCode == 'completed') {
-                return status == 'completed';
-              } else if (filterCode == 'cancelled') {
-                return status == 'cancelled' || status == 'declined' || status == 'rejected';
-              }
-              return status == filterCode;
-            }).toList();
-
-            if (filteredDocs.isEmpty) {
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9F9FB),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFE5E5EA)),
+                const SizedBox(height: 4),
+                const Text(
+                  'Bookings and requests updated in real-time will appear here.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
                 ),
-                child: Column(
-                  children: [
-                    const Icon(Icons.assignment_outlined, size: 44, color: Colors.black38),
-                    const SizedBox(height: 10),
-                    Text(
-                      'No $_selectedStatusFilter Bookings',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: filteredList.length,
+          itemBuilder: (context, index) {
+            final booking = filteredList[index];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 14.0),
+              child: RequestCard(
+                requestId: booking.id,
+                customerName: booking.customerName.isNotEmpty ? booking.customerName : 'Customer',
+                serviceName: booking.serviceTitle,
+                location: booking.address,
+                description: booking.description.isNotEmpty ? booking.description : 'Service Request',
+                serviceImageUrl: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&auto=format&fit=crop&q=60',
+                badgeText: booking.status == 'completed'
+                    ? 'Completed'
+                    : ((booking.status == 'cancelled' || booking.status == 'declined' || booking.status == 'rejected')
+                        ? 'Cancelled'
+                        : (booking.status == 'pending_customer_confirmation'
+                            ? 'Pending Confirmation'
+                            : 'In Progress')),
+                dateText: booking.date.isNotEmpty ? booking.date : 'Today',
+                timeText: booking.time.isNotEmpty ? booking.time : 'Now',
+                onView: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TaskDescriptionScreen(
+                        requestId: booking.id,
+                        initialIndex: 1,
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Bookings and requests updated in real-time will appear here.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return Column(
-              children: filteredDocs.map((doc) {
-                final data = doc.data();
-                final String rawId = (data['requestId'] as String? ??
-                    data['bookingId'] as String? ??
-                    data['id'] as String? ??
-                    '').trim();
-                final String reqId = data['bookingId'] as String? ?? rawId;
-
-                final custName = data['customerName'] as String? ?? 'Customer';
-                final serviceName = data['title'] as String? ?? 'Service';
-                final location = data['address'] as String? ?? 'Location';
-                final desc = data['description'] as String? ?? '';
-                final status = (data['status'] as String? ?? 'open').toLowerCase();
-                final imgUrl = data['serviceImageUrl'] as String? ?? 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=500&auto=format&fit=crop&q=60';
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14.0),
-                  child: RequestCard(
-                    requestId: reqId,
-                    customerName: custName,
-                    serviceName: serviceName,
-                    location: location,
-                    description: desc,
-                    serviceImageUrl: imgUrl,
-                    badgeText: status == 'completed'
-                        ? 'Completed'
-                        : ((status == 'cancelled' || status == 'declined' || status == 'rejected')
-                            ? 'Cancelled'
-                            : (status == 'pending_customer_confirmation'
-                                ? 'Pending Confirmation'
-                                : 'In Progress')),
-                    dateText: 'Mon, Dec 23',
-                    timeText: '12:00',
-                    onView: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => TaskDescriptionScreen(
-                            requestId: reqId,
-                            initialIndex: 1,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              }).toList(),
+                  );
+                },
+              ),
+            );
+          },
         );
       },
-    );
-      },
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: CircularProgressIndicator(color: Colors.black),
+        ),
+      ),
+      error: (err, _) => Center(
+        child: Text('Error loading requests: $err', style: const TextStyle(color: Colors.grey)),
+      ),
     );
   }
-
 }

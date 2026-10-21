@@ -1,14 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import '../models/transaction_model.dart';
 import 'database_service.dart';
 
 class PaymentAndTransactionService {
-  final FirebaseFirestore _db;
   final DatabaseService _dbService = DatabaseService();
 
-  PaymentAndTransactionService({FirebaseFirestore? db})
-      : _db = db ?? FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database');
+  PaymentAndTransactionService();
 
   String _generate9DigitId() {
     return _dbService.generate9DigitId();

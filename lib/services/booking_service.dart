@@ -1,18 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import '../models/booking_model.dart';
 import '../models/bid_model.dart';
 import 'database_service.dart';
 
 class BookingService {
-  final FirebaseFirestore _db;
   final DatabaseService _dbService = DatabaseService();
 
-  BookingService({FirebaseFirestore? db}) : _db = db ?? FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database');
-
-  String _generate9DigitId() {
-    return _dbService.generate9DigitId();
-  }
+  BookingService();
 
   /// Creates a new booking request in exact schema
   Future<String> createBookingRequest(BookingModel booking) async {

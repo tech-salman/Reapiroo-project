@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:reapiroo/screens/onboarding_screen.dart';
-import 'package:reapiroo/screens/customer/customer_wallet_screen.dart';
-import 'package:reapiroo/screens/customer/customer_main_layout.dart';
-import 'package:reapiroo/services/database_service.dart';
+import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/services/storage_service.dart';
+import 'package:reapiroo/screens/onboarding_screen.dart';
+import 'package:reapiroo/screens/customer/customer_main_layout.dart';
+import 'package:reapiroo/screens/customer/customer_wallet_screen.dart';
 
 enum CustomerProfileSubView {
   main,
@@ -19,7 +20,7 @@ enum CustomerProfileSubView {
   helpSupport,
 }
 
-class CustomerProfileScreen extends StatefulWidget {
+class CustomerProfileScreen extends ConsumerStatefulWidget {
   final bool embedInShell;
 
   const CustomerProfileScreen({
@@ -28,7 +29,7 @@ class CustomerProfileScreen extends StatefulWidget {
   });
 
   @override
-  State<CustomerProfileScreen> createState() => _CustomerProfileScreenState();
+  ConsumerState<CustomerProfileScreen> createState() => _CustomerProfileScreenState();
 }
 
 class AddressItem {
@@ -43,7 +44,7 @@ class AddressItem {
   });
 }
 
-class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
+class _CustomerProfileScreenState extends ConsumerState<CustomerProfileScreen> {
   CustomerProfileSubView _activeView = CustomerProfileSubView.main;
 
   // General Information Form Controllers
@@ -59,7 +60,6 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
   final TextEditingController _addressLabelController = TextEditingController();
   final TextEditingController _addressTextController = TextEditingController();
-  final DatabaseService _dbService = DatabaseService();
 
   @override
   void initState() {
@@ -104,8 +104,9 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
         await prefs.setString('profile_photo_url', uploadedUrl);
 
         final phoneKey = prefs.getString('phoneNumber');
+        final dbService = ref.read(databaseServiceProvider);
         if (phoneKey != null && phoneKey.isNotEmpty) {
-          await _dbService.updateCustomerProfile(phoneKey, {'avatarUrl': uploadedUrl});
+          await dbService.updateCustomerProfile(phoneKey, {'avatarUrl': uploadedUrl});
         }
 
         if (mounted) {
@@ -143,18 +144,19 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
     final phoneKey = prefs.getString('phoneNumber') ?? firebaseUser?.phoneNumber ?? '';
     final uid = firebaseUser?.uid ?? '';
+    final dbService = ref.read(databaseServiceProvider);
 
     // 1. Try Firestore fetch
     DocumentSnapshot<Map<String, dynamic>>? doc;
     if (uid.isNotEmpty) {
       try {
-        final snap = await _dbService.getCustomerProfile(uid);
+        final snap = await dbService.getCustomerProfile(uid);
         if (snap.exists && snap.data() != null) doc = snap;
       } catch (_) {}
     }
     if (doc == null && phoneKey.isNotEmpty) {
       try {
-        final snap = await _dbService.getCustomerProfile(phoneKey);
+        final snap = await dbService.getCustomerProfile(phoneKey);
         if (snap.exists && snap.data() != null) doc = snap;
       } catch (_) {}
     }
@@ -233,6 +235,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       final phoneKey = prefs.getString('phoneNumber');
       final user = FirebaseAuth.instance.currentUser;
       final uid = user?.uid;
+      final dbService = ref.read(databaseServiceProvider);
 
       final addressesData = _addresses.map((a) => {
         'label': a.label,
@@ -243,10 +246,10 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       await prefs.setString('customer_saved_addresses_json', json.encode(addressesData));
 
       if (uid != null && uid.isNotEmpty) {
-        await _dbService.updateCustomerProfile(uid, {'savedAddresses': addressesData});
+        await dbService.updateCustomerProfile(uid, {'savedAddresses': addressesData});
       }
       if (phoneKey != null && phoneKey.isNotEmpty) {
-        await _dbService.updateCustomerProfile(phoneKey, {'savedAddresses': addressesData});
+        await dbService.updateCustomerProfile(phoneKey, {'savedAddresses': addressesData});
       }
     } catch (_) {}
   }
@@ -258,9 +261,10 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
 
     final fullName = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'.trim();
     final email = _emailController.text.trim();
+    final dbService = ref.read(databaseServiceProvider);
 
     try {
-      await _dbService.updateCustomerProfile(phoneKey, {
+      await dbService.updateCustomerProfile(phoneKey, {
         'name': fullName,
         'email': email,
         'gender': _selectedGender,

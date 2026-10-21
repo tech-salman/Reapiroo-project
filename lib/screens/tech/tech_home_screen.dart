@@ -1,18 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:reapiroo/screens/tech/task_description_screen.dart';
-import 'package:reapiroo/screens/tech/tech_wallet_screen.dart';
-import 'package:reapiroo/screens/tech/tech_notification_screen.dart';
-import 'package:reapiroo/screens/tech/tech_main_layout.dart';
-import 'package:reapiroo/widgets/request_card.dart';
-import 'package:reapiroo/services/database_service.dart';
+import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/widgets/notification_bell_button.dart';
 import 'package:reapiroo/widgets/app_info_cards_scroll_view.dart';
+import 'package:reapiroo/widgets/request_card.dart';
+import 'package:reapiroo/screens/tech/tech_main_layout.dart';
+import 'package:reapiroo/screens/tech/tech_wallet_screen.dart';
+import 'package:reapiroo/screens/tech/tech_notification_screen.dart';
+import 'package:reapiroo/screens/tech/task_description_screen.dart';
 
-class TechHomeScreen extends StatefulWidget {
+class TechHomeScreen extends ConsumerStatefulWidget {
   final bool embedInShell;
 
   const TechHomeScreen({
@@ -21,11 +22,10 @@ class TechHomeScreen extends StatefulWidget {
   });
 
   @override
-  State<TechHomeScreen> createState() => _TechHomeScreenState();
+  ConsumerState<TechHomeScreen> createState() => _TechHomeScreenState();
 }
 
-class _TechHomeScreenState extends State<TechHomeScreen> {
-  final DatabaseService _dbService = DatabaseService();
+class _TechHomeScreenState extends ConsumerState<TechHomeScreen> {
   bool _isAvailable = true;
   double _balance = 0.00;
   String _userName = 'Technician';
@@ -69,6 +69,7 @@ class _TechHomeScreenState extends State<TechHomeScreen> {
     final authUser = FirebaseAuth.instance.currentUser;
     final prefs = await SharedPreferences.getInstance();
     final key = authUser?.uid ?? prefs.getString('phoneNumber') ?? prefs.getString('email') ?? '';
+    final dbService = ref.read(databaseServiceProvider);
 
     setState(() {
       _userKey = key;
@@ -77,7 +78,7 @@ class _TechHomeScreenState extends State<TechHomeScreen> {
 
     if (key.isNotEmpty) {
       _techProfileSub?.cancel();
-      _techProfileSub = _dbService.streamTechProfile(key).listen((snap) {
+      _techProfileSub = dbService.streamTechProfile(key).listen((snap) {
         if (snap.exists && snap.data() != null) {
           final data = snap.data()!;
           if (mounted) {
@@ -135,7 +136,7 @@ class _TechHomeScreenState extends State<TechHomeScreen> {
       _isAvailable = val;
     });
     if (_userKey.isNotEmpty) {
-      await _dbService.updateTechAvailability(_userKey, val);
+      await ref.read(databaseServiceProvider).updateTechAvailability(_userKey, val);
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -304,10 +305,6 @@ class _TechHomeScreenState extends State<TechHomeScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildAnnouncementsRow() {
-    return Container();
   }
 
   // --- BALANCE & AVAILABILITY ---
@@ -564,7 +561,7 @@ class _TechHomeScreenState extends State<TechHomeScreen> {
       );
     }
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _dbService.techRequestsCollection(_userKey).snapshots(),
+      stream: ref.read(databaseServiceProvider).techRequestsCollection(_userKey).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(

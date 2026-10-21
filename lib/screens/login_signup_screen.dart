@@ -1,24 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:reapiroo/services/auth_service.dart';
-import 'package:reapiroo/services/database_service.dart';
-import 'package:reapiroo/screens/role_selection_screen.dart';
-import 'package:reapiroo/screens/tech/tech_main_layout.dart';
-import 'package:reapiroo/screens/customer/customer_main_layout.dart';
 
-class LoginSignupScreen extends StatefulWidget {
+import '../providers/auth_provider.dart';
+import '../providers/services_providers.dart';
+import 'role_selection_screen.dart';
+import 'tech/tech_main_layout.dart';
+import 'customer/customer_main_layout.dart';
+
+class LoginSignupScreen extends ConsumerStatefulWidget {
   const LoginSignupScreen({super.key});
 
   @override
-  State<LoginSignupScreen> createState() => _LoginSignupScreenState();
+  ConsumerState<LoginSignupScreen> createState() => _LoginSignupScreenState();
 }
 
-class _LoginSignupScreenState extends State<LoginSignupScreen> {
+class _LoginSignupScreenState extends ConsumerState<LoginSignupScreen> {
   bool _isLoading = false;
   String? _errorMessage;
-
-  final AuthService _authService = AuthService();
-  final DatabaseService _dbService = DatabaseService();
 
   void _showGoogleConsentDialog() {
     showDialog(
@@ -113,7 +112,8 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
     });
 
     try {
-      final userCred = await _authService.signInWithGoogle(
+      final authController = ref.read(authControllerProvider.notifier);
+      final userCred = await authController.signInWithGoogle(
         onFailed: (err) {
           if (mounted) {
             setState(() {
@@ -135,6 +135,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
       final displayName = user.displayName ?? '';
       final photoUrl = user.photoURL ?? '';
 
+      final dbService = ref.read(databaseServiceProvider);
       final navigator = Navigator.of(context);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isLoggedIn', true);
@@ -150,11 +151,11 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
       // Check if user exists in Firestore by UID or email safely
       Map<String, dynamic>? userData;
       try {
-        final profileDoc = await _dbService.getUserProfile(user.uid);
+        final profileDoc = await dbService.getUserProfile(user.uid);
         if (profileDoc.exists && profileDoc.data() != null) {
           userData = profileDoc.data();
         } else {
-          userData = await _dbService.checkUserExistsByEmail(email);
+          userData = await dbService.checkUserExistsByEmail(email);
         }
       } catch (_) {
         userData = null;
@@ -165,9 +166,9 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
         final role = userData['role'] as String? ?? 'customer';
         if (phoneKey != null && phoneKey.isNotEmpty) {
           if (role == 'tech') {
-            await _dbService.updateTechProfile(phoneKey, {'avatarUrl': photoUrl});
+            await dbService.updateTechProfile(phoneKey, {'avatarUrl': photoUrl});
           } else {
-            await _dbService.updateCustomerProfile(phoneKey, {'avatarUrl': photoUrl});
+            await dbService.updateCustomerProfile(phoneKey, {'avatarUrl': photoUrl});
           }
         }
       }

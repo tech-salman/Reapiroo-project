@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:reapiroo/screens/onboarding_screen.dart';
-import 'package:reapiroo/screens/customer/customer_main_layout.dart';
-import 'package:reapiroo/screens/customer/customer_wallet_screen.dart';
-import 'package:reapiroo/screens/customer/customer_notification_screen.dart';
-import '../services/storage_service.dart';
-import '../services/database_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class CustomerDrawer extends StatefulWidget {
+import '../providers/auth_provider.dart';
+import '../screens/onboarding_screen.dart';
+import '../screens/customer/customer_main_layout.dart';
+import '../screens/customer/customer_wallet_screen.dart';
+import '../screens/customer/customer_notification_screen.dart';
+import '../services/storage_service.dart';
+
+class CustomerDrawer extends ConsumerWidget {
   final ValueChanged<int>? onSelectTab;
 
   const CustomerDrawer({
@@ -16,79 +16,23 @@ class CustomerDrawer extends StatefulWidget {
     this.onSelectTab,
   });
 
-  @override
-  State<CustomerDrawer> createState() => _CustomerDrawerState();
-}
-
-class _CustomerDrawerState extends State<CustomerDrawer> {
-  final DatabaseService _dbService = DatabaseService();
-  String _userName = 'Customer User';
-  String _userEmail = 'customer@example.com';
-  String _userAvatar = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUserInfo();
-  }
-
-  Future<void> _loadUserInfo() async {
-    final prefs = await SharedPreferences.getInstance();
-    final firebaseUser = FirebaseAuth.instance.currentUser;
-    final fname = prefs.getString('firstName') ?? prefs.getString('cust_firstName') ?? 'Customer';
-    final lname = prefs.getString('lastName') ?? prefs.getString('cust_lastName') ?? 'User';
-    final email = prefs.getString('email') ?? firebaseUser?.email ?? 'customer@example.com';
-    final profilePhoto = prefs.getString('profile_photo_url') ?? '';
-    final googlePhoto = prefs.getString('google_photo_url') ?? '';
-
-    String avatar = '';
-    if (profilePhoto.isNotEmpty) {
-      avatar = profilePhoto;
-    } else if (firebaseUser?.photoURL != null && firebaseUser!.photoURL!.isNotEmpty) {
-      avatar = firebaseUser.photoURL!;
-    } else if (googlePhoto.isNotEmpty) {
-      avatar = googlePhoto;
-    }
-
-    final phoneKey = prefs.getString('phoneNumber');
-    if (phoneKey != null && phoneKey.isNotEmpty) {
-      try {
-        final doc = await _dbService.getCustomerProfile(phoneKey);
-        if (doc.exists && doc.data() != null) {
-          final firestoreAvatar = doc.data()!['avatarUrl'] as String? ?? '';
-          if (firestoreAvatar.isNotEmpty) {
-            avatar = firestoreAvatar;
-            await prefs.setString('profile_photo_url', firestoreAvatar);
-          }
-        }
-      } catch (_) {}
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _userName = '$fname $lname'.trim();
-      _userEmail = email;
-      _userAvatar = avatar;
-    });
-  }
-
-  void _navigateToTab(int tabIndex) {
+  void _navigateToTab(BuildContext context, int tabIndex) {
     Navigator.pop(context); // Close drawer first
 
-    if (widget.onSelectTab != null) {
-      widget.onSelectTab!(tabIndex);
+    if (onSelectTab != null) {
+      onSelectTab!(tabIndex);
     } else {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (context) => CustomerMainLayout(initialIndex: tabIndex),
         ),
-            (route) => false,
+        (route) => false,
       );
     }
   }
 
-  Future<void> _handleLogout() async {
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -113,20 +57,33 @@ class _CustomerDrawerState extends State<CustomerDrawer> {
     );
 
     if (confirm == true) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', false);
+      await ref.read(authControllerProvider.notifier).signOut();
 
-      if (!mounted) return;
+      if (!context.mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-            (route) => false,
+        (route) => false,
       );
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(userProfileStreamProvider);
+    final profile = profileAsync.asData?.value;
+    final firebaseUser = ref.watch(currentFirebaseUserProvider);
+
+    final userName = profile?.firstName.isNotEmpty == true
+        ? profile!.firstName
+        : (firebaseUser?.displayName ?? 'Customer User');
+    final userEmail = profile?.email.isNotEmpty == true
+        ? profile!.email
+        : (firebaseUser?.email ?? 'customer@example.com');
+    final userAvatar = profile?.avatarUrl.isNotEmpty == true
+        ? profile!.avatarUrl
+        : (firebaseUser?.photoURL ?? '');
+
     return Drawer(
       width: 290.0,
       elevation: 16.0,
@@ -148,7 +105,7 @@ class _CustomerDrawerState extends State<CustomerDrawer> {
                           children: [
                             CircleAvatar(
                               radius: 28,
-                              backgroundImage: StorageService.getImageProvider(_userAvatar),
+                              backgroundImage: StorageService.getImageProvider(userAvatar),
                               backgroundColor: Colors.grey,
                             ),
                             const SizedBox(width: 14),
@@ -157,7 +114,7 @@ class _CustomerDrawerState extends State<CustomerDrawer> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _userName,
+                                    userName,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 18,
@@ -167,7 +124,7 @@ class _CustomerDrawerState extends State<CustomerDrawer> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    _userEmail,
+                                    userEmail,
                                     style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 12,
@@ -191,22 +148,22 @@ class _CustomerDrawerState extends State<CustomerDrawer> {
                       _buildDrawerTile(
                         icon: Icons.home_outlined,
                         title: 'Home',
-                        onTap: () => _navigateToTab(0),
+                        onTap: () => _navigateToTab(context, 0),
                       ),
                       _buildDrawerTile(
                         icon: Icons.calendar_month_outlined,
                         title: 'Bookings',
-                        onTap: () => _navigateToTab(1),
+                        onTap: () => _navigateToTab(context, 1),
                       ),
                       _buildDrawerTile(
                         icon: Icons.chat_bubble_outline,
                         title: 'Chat',
-                        onTap: () => _navigateToTab(2),
+                        onTap: () => _navigateToTab(context, 2),
                       ),
                       _buildDrawerTile(
                         icon: Icons.person_outline,
                         title: 'Profile',
-                        onTap: () => _navigateToTab(3),
+                        onTap: () => _navigateToTab(context, 3),
                       ),
                       _buildDrawerTile(
                         icon: Icons.account_balance_wallet_outlined,
@@ -239,7 +196,7 @@ class _CustomerDrawerState extends State<CustomerDrawer> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                         child: ListTile(
-                          onTap: _handleLogout,
+                          onTap: () => _handleLogout(context, ref),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           tileColor: const Color(0xFFFFF0F0),
                           leading: const Icon(Icons.logout, color: Color(0xFFD32F2F), size: 22),

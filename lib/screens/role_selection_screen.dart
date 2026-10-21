@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:reapiroo/screens/onboarding_screen.dart';
-import 'package:reapiroo/screens/customer_signup_screen.dart';
-import 'package:reapiroo/screens/tech_signup_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'onboarding_screen.dart';
+import 'customer_signup_screen.dart';
+import 'tech_signup_screen.dart';
 
-class RoleSelectionScreen extends StatefulWidget {
+class RoleSelectionScreen extends ConsumerStatefulWidget {
   const RoleSelectionScreen({super.key});
 
   @override
-  State<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
+  ConsumerState<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
 }
 
-class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
+class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
   String selectedRole = 'Customer'; // Default selection
 
   @override

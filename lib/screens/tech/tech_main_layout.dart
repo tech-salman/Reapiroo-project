@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:reapiroo/screens/tech/tech_home_screen.dart';
-import 'package:reapiroo/screens/tech/tech_requests_screen.dart';
-import 'package:reapiroo/screens/tech/tech_chat_screen.dart';
-import 'package:reapiroo/screens/tech/tech_profile_screen.dart';
-import 'package:reapiroo/widgets/custom_bottom_nav_bar.dart';
-import 'package:reapiroo/widgets/tech_drawer.dart';
-import 'package:reapiroo/widgets/realtime_alert_listener.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class TechMainLayout extends StatefulWidget {
+import 'tech_home_screen.dart';
+import 'tech_requests_screen.dart';
+import 'tech_chat_screen.dart';
+import 'tech_profile_screen.dart';
+import '../../widgets/custom_bottom_nav_bar.dart';
+import '../../widgets/tech_drawer.dart';
+import '../../widgets/realtime_alert_listener.dart';
+
+class TechMainLayout extends ConsumerStatefulWidget {
   final int initialIndex;
 
   const TechMainLayout({
@@ -16,10 +18,10 @@ class TechMainLayout extends StatefulWidget {
   });
 
   @override
-  State<TechMainLayout> createState() => _TechMainLayoutState();
+  ConsumerState<TechMainLayout> createState() => _TechMainLayoutState();
 }
 
-class _TechMainLayoutState extends State<TechMainLayout> {
+class _TechMainLayoutState extends ConsumerState<TechMainLayout> {
   late int _currentIndex;
 
   static const List<CustomNavItem> _navItems = [

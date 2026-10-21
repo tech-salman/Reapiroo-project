@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class PermissionService {
-  PermissionService._();
+  const PermissionService();
 
   /// Check if location permission is granted.
   static Future<bool> checkLocationPermission() async {
