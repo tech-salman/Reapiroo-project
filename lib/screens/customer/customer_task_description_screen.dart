@@ -2,17 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:video_player/video_player.dart';
 import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/services/permission_service.dart';
 import 'package:reapiroo/widgets/custom_bottom_nav_bar.dart';
@@ -20,6 +16,7 @@ import 'package:reapiroo/screens/customer/customer_main_layout.dart';
 import 'package:reapiroo/screens/customer/customer_offers_screen.dart';
 import 'package:reapiroo/services/chat_service.dart';
 import 'package:reapiroo/services/storage_service.dart';
+import 'package:reapiroo/widgets/voice_recorder_widget.dart';
 
 class CustomerTaskDescriptionScreen extends ConsumerStatefulWidget {
   final String serviceName;
@@ -57,14 +54,7 @@ class _CustomerTaskDescriptionScreenState
 
   bool _needSpareParts = false;
   String? _uploadedSparePartPath;
-
-  // Voice Recording State
-  bool _isRecordingVoice = false;
   String? _uploadedVoiceNotePath;
-  int _recordingSeconds = 0;
-  Timer? _recordingTimer;
-  VideoPlayerController? _voicePreviewController;
-  bool _isPlayingVoicePreview = false;
 
   bool _isLoading = false;
 
@@ -87,8 +77,6 @@ class _CustomerTaskDescriptionScreenState
   @override
   void dispose() {
     _descriptionController.dispose();
-    _recordingTimer?.cancel();
-    _voicePreviewController?.dispose();
     super.dispose();
   }
 
@@ -270,166 +258,6 @@ class _CustomerTaskDescriptionScreenState
         ),
       ),
     );
-  }
-
-  // --- 3. Voice Recording Handling ---
-  static const MethodChannel _audioRecorderChannel = MethodChannel('com.reapiroo.reapiroo/audio_recorder');
-  bool _isNativeRecording = false;
-
-  Uint8List _generateWavHeaderAndAudio({required int durationSeconds}) {
-    const sampleRate = 22050; // 22.05kHz mono 16-bit
-    final int dur = durationSeconds < 1 ? 1 : durationSeconds;
-    final int numSamples = sampleRate * dur;
-    final pcmBytes = Uint8List(numSamples * 2);
-    final pcmBuffer = ByteData.sublistView(pcmBytes);
-
-    for (int i = 0; i < numSamples; i++) {
-      final t = i / sampleRate;
-      final envelope = (math.sin(t * 6) > 0 ? 0.9 : 0.3) * math.exp(-0.15 * (t % 0.4));
-      final sampleVal = (math.sin(2 * math.pi * 300 * t) * 0.5 +
-                         math.sin(2 * math.pi * 600 * t) * 0.3 +
-                         math.sin(2 * math.pi * 1200 * t) * 0.2) * envelope;
-      final int16Val = (sampleVal.clamp(-1.0, 1.0) * 32767).toInt();
-      pcmBuffer.setInt16(i * 2, int16Val, Endian.little);
-    }
-
-    final wavHeader = Uint8List(44 + pcmBytes.length);
-    final headerData = ByteData.sublistView(wavHeader);
-
-    wavHeader.setRange(0, 4, ascii.encode('RIFF'));
-    headerData.setUint32(4, 36 + pcmBytes.length, Endian.little);
-    wavHeader.setRange(8, 12, ascii.encode('WAVE'));
-
-    wavHeader.setRange(12, 16, ascii.encode('fmt '));
-    headerData.setUint32(16, 16, Endian.little);
-    headerData.setUint16(20, 1, Endian.little); // PCM
-    headerData.setUint16(22, 1, Endian.little); // Mono
-    headerData.setUint32(24, sampleRate, Endian.little);
-    headerData.setUint32(28, sampleRate * 2, Endian.little);
-    headerData.setUint16(32, 2, Endian.little);
-    headerData.setUint16(34, 16, Endian.little);
-
-    wavHeader.setRange(36, 40, ascii.encode('data'));
-    headerData.setUint32(40, pcmBytes.length, Endian.little);
-
-    wavHeader.setRange(44, 44 + pcmBytes.length, pcmBytes);
-    return wavHeader;
-  }
-
-  Future<void> _startVoiceRecording() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final bool hasMicPermission = await PermissionService.requestMicrophonePermission(
-      context,
-      reason: 'Reapiroo requires access to your Microphone to record voice notes for service technicians.',
-    );
-    if (!hasMicPermission) return;
-
-    _voicePreviewController?.dispose();
-    _voicePreviewController = null;
-
-    final tempDir = await getTemporaryDirectory();
-    final m4aPath = '${tempDir.path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
-    try {
-      await _audioRecorderChannel.invokeMethod('startRecording', {'filePath': m4aPath});
-      _isNativeRecording = true;
-    } catch (_) {
-      _isNativeRecording = false;
-    }
-
-    setState(() {
-      _isRecordingVoice = true;
-      _recordingSeconds = 0;
-      _uploadedVoiceNotePath = m4aPath;
-      _isPlayingVoicePreview = false;
-    });
-
-    _recordingTimer?.cancel();
-    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted && _isRecordingVoice) {
-        setState(() {
-          _recordingSeconds++;
-        });
-      }
-    });
-
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Recording started... Speak into your microphone.')),
-    );
-  }
-
-  Future<void> _stopVoiceRecording() async {
-    _recordingTimer?.cancel();
-    final int dur = _recordingSeconds < 1 ? 1 : _recordingSeconds;
-
-    if (_isNativeRecording) {
-      try {
-        await _audioRecorderChannel.invokeMethod('stopRecording');
-      } catch (_) {}
-    }
-
-    try {
-      String recordPath = _uploadedVoiceNotePath ?? '';
-      final file = File(recordPath);
-
-      if (!await file.exists() || await file.length() == 0) {
-        final wavBytes = _generateWavHeaderAndAudio(durationSeconds: dur);
-        recordPath = '${(await getTemporaryDirectory()).path}/voice_note_${DateTime.now().millisecondsSinceEpoch}.wav';
-        await File(recordPath).writeAsBytes(wavBytes);
-      }
-
-      final controller = VideoPlayerController.file(File(recordPath));
-      await controller.initialize();
-      controller.setVolume(1.0);
-      controller.addListener(() {
-        if (mounted) {
-          setState(() {
-            _isPlayingVoicePreview = controller.value.isPlaying;
-          });
-          if (controller.value.position >= controller.value.duration && controller.value.duration > Duration.zero) {
-            controller.seekTo(Duration.zero);
-            controller.pause();
-          }
-        }
-      });
-
-      setState(() {
-        _isRecordingVoice = false;
-        _uploadedVoiceNotePath = recordPath;
-        _voicePreviewController = controller;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Voice note recorded (${dur}s)! Click play to preview.')),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _isRecordingVoice = false;
-      });
-    }
-  }
-
-  Future<void> _toggleVoicePreview() async {
-    if (_voicePreviewController == null) return;
-    if (_voicePreviewController!.value.isPlaying) {
-      await _voicePreviewController!.pause();
-    } else {
-      await _voicePreviewController!.play();
-    }
-  }
-
-  void _deleteVoiceNote() {
-    _recordingTimer?.cancel();
-    _voicePreviewController?.dispose();
-    _voicePreviewController = null;
-    setState(() {
-      _uploadedVoiceNotePath = null;
-      _isRecordingVoice = false;
-      _recordingSeconds = 0;
-      _isPlayingVoicePreview = false;
-    });
   }
 
   Future<void> _saveLocationToUserAccountInFirebase(String address, double lat, double lng) async {
@@ -1570,172 +1398,12 @@ class _CustomerTaskDescriptionScreenState
 
                 // 5. Voice Note Card
                 _buildFormCard(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Voice Note',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            if (_isRecordingVoice || _uploadedVoiceNotePath != null)
-                              Text(
-                                _isRecordingVoice
-                                    ? 'Recording... 00:${_recordingSeconds.toString().padLeft(2, '0')}'
-                                    : 'Voice note recorded (${_recordingSeconds}s)',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: _isRecordingVoice ? Colors.red : Colors.black54,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (_isRecordingVoice)
-                        GestureDetector(
-                          onTap: _stopVoiceRecording,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.stop, color: Colors.white, size: 16),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Stop',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      else if (_uploadedVoiceNotePath != null)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            GestureDetector(
-                              onTap: _toggleVoicePreview,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.black,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _isPlayingVoicePreview ? Icons.pause : Icons.play_arrow,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _isPlayingVoicePreview ? 'Pause' : 'Play',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 60,
-                              height: 18,
-                              child: Builder(builder: (context) {
-                                double progress = 0.0;
-                                if (_voicePreviewController != null &&
-                                    _voicePreviewController!.value.isInitialized &&
-                                    _voicePreviewController!.value.duration.inMilliseconds > 0) {
-                                  progress = (_voicePreviewController!.value.position.inMilliseconds /
-                                          _voicePreviewController!.value.duration.inMilliseconds)
-                                      .clamp(0.0, 1.0);
-                                }
-                                const heights = [8.0, 14.0, 18.0, 10.0, 16.0, 6.0, 12.0, 16.0, 10.0, 14.0, 8.0, 12.0];
-                                final int totalBars = heights.length;
-                                final int playedCount = (progress * totalBars).round().clamp(0, totalBars);
-
-                                return Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: List.generate(totalBars, (index) {
-                                    final bool isPlayed = index < playedCount;
-                                    return AnimatedContainer(
-                                      duration: const Duration(milliseconds: 80),
-                                      width: 2.0,
-                                      height: heights[index],
-                                      decoration: BoxDecoration(
-                                        color: isPlayed ? Colors.black : Colors.grey.shade400,
-                                        borderRadius: BorderRadius.circular(1.5),
-                                      ),
-                                    );
-                                  }),
-                                );
-                              }),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: _deleteVoiceNote,
-                              child: Container(
-                                padding: const EdgeInsets.all(7),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                              ),
-                            ),
-                          ],
-                        )
-                      else
-                        GestureDetector(
-                          onTap: _startVoiceRecording,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.black,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.mic, color: Colors.white, size: 16),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Record',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
+                  child: VoiceRecorderWidget(
+                    onVoiceNoteChanged: (path) {
+                      setState(() {
+                        _uploadedVoiceNotePath = path;
+                      });
+                    },
                   ),
                 ),
 

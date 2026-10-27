@@ -23,6 +23,16 @@ class CustomerChatScreen extends ConsumerStatefulWidget {
 
 class _CustomerChatScreenState extends ConsumerState<CustomerChatScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final Map<String, Future<String>> _avatarFutureCache = {};
+
+  Future<String> _getAvatarFuture(WidgetRef ref, String id, String initialUrl) {
+    if (initialUrl.isNotEmpty) return Future.value(initialUrl);
+    if (id.isEmpty) return Future.value('');
+    return _avatarFutureCache.putIfAbsent(
+      id,
+      () => ref.read(databaseServiceProvider).getUniversalUserAvatar(id),
+    );
+  }
 
   @override
   void dispose() {
@@ -193,7 +203,7 @@ class _CustomerChatScreenState extends ConsumerState<CustomerChatScreen> {
                   final bookingId = thread.bookingId;
 
                   return FutureBuilder<String>(
-                    future: initialAvatarUrl.isNotEmpty ? Future.value(initialAvatarUrl) : ref.read(databaseServiceProvider).getUniversalUserAvatar(techId),
+                    future: _getAvatarFuture(ref, techId, initialAvatarUrl),
                     builder: (context, avatarSnap) {
                       final avatarUrl = avatarSnap.data ?? initialAvatarUrl;
 

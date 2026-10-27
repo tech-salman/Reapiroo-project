@@ -15,7 +15,18 @@ import 'providers/auth_provider.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/tech/tech_main_layout.dart';
 import 'screens/customer/customer_main_layout.dart';
-import 'services/database_service.dart';
+
+final ThemeData _kLightAppTheme = ThemeData(
+  brightness: Brightness.light,
+  textTheme: GoogleFonts.montserratTextTheme(),
+  useMaterial3: true,
+);
+
+final ThemeData _kDarkAppTheme = ThemeData(
+  brightness: Brightness.dark,
+  textTheme: GoogleFonts.montserratTextTheme(ThemeData.dark().textTheme),
+  useMaterial3: true,
+);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,13 +38,11 @@ void main() async {
   try {
     FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').settings = const Settings(
       persistenceEnabled: true,
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      cacheSizeBytes: 104857600, // 100 MB capped limit
     );
-  } catch (_) {}
-
-  try {
-    await DatabaseService().purgeLegacyCollections();
-  } catch (_) {}
+  } catch (e) {
+    debugPrint('Firestore settings initialization error: $e');
+  }
 
   final prefs = await SharedPreferences.getInstance();
   final bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
@@ -83,16 +92,8 @@ class MyApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       themeMode: appSettings.darkModeEnabled ? ThemeMode.dark : ThemeMode.light,
-      theme: ThemeData(
-        brightness: Brightness.light,
-        textTheme: GoogleFonts.montserratTextTheme(),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        textTheme: GoogleFonts.montserratTextTheme(ThemeData.dark().textTheme),
-        useMaterial3: true,
-      ),
+      theme: _kLightAppTheme,
+      darkTheme: _kDarkAppTheme,
       builder: (context, child) {
         if (kIsWeb) {
           return Container(
@@ -121,11 +122,11 @@ class MyApp extends ConsumerWidget {
               }
             },
             loading: () => _getInitialScreenFallback(),
-            error: (_, __) => _getInitialScreenFallback(),
+            error: (err, stack) => _getInitialScreenFallback(),
           );
         },
         loading: () => _getInitialScreenFallback(),
-        error: (_, __) => _getInitialScreenFallback(),
+        error: (err, stack) => _getInitialScreenFallback(),
       ),
     );
   }

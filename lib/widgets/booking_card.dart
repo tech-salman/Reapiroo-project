@@ -108,7 +108,7 @@ class BookingCard extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(14),
                       child: Image(
-                        image: StorageService.getImageProvider(serviceImageUrl),
+                        image: StorageService.getImageProvider(serviceImageUrl, targetWidth: 200),
                         width: 95,
                         height: 85,
                         fit: BoxFit.cover,

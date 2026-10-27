@@ -64,7 +64,7 @@ class _TaskDescriptionCardState extends State<TaskDescriptionCard> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: Image(
-                        image: StorageService.getImageProvider(url),
+                        image: StorageService.getImageProvider(url, targetWidth: 600),
                         fit: BoxFit.contain,
                         errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.white, size: 50),
                       ),
@@ -190,7 +190,7 @@ class _TaskDescriptionCardState extends State<TaskDescriptionCard> {
                     child: GestureDetector(
                       onTap: () => _showMediaPopup(context, widget.serviceImageUrl, false),
                       child: Image(
-                        image: StorageService.getImageProvider(widget.serviceImageUrl),
+                        image: StorageService.getImageProvider(widget.serviceImageUrl, targetWidth: 200),
                         width: 86,
                         height: 72,
                         fit: BoxFit.cover,
@@ -292,7 +292,7 @@ class _TaskDescriptionCardState extends State<TaskDescriptionCard> {
                             fit: StackFit.expand,
                             children: [
                               Image(
-                                image: StorageService.getImageProvider(url),
+                                image: StorageService.getImageProvider(url, targetWidth: 500),
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey.shade900),
                               ),
@@ -351,7 +351,7 @@ class _TaskDescriptionCardState extends State<TaskDescriptionCard> {
                         fit: StackFit.expand,
                         children: [
                           Image(
-                            image: StorageService.getImageProvider(widget.serviceImageUrl),
+                            image: StorageService.getImageProvider(widget.serviceImageUrl, targetWidth: 500),
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey.shade900),
                           ),
@@ -416,7 +416,7 @@ class _TaskDescriptionCardState extends State<TaskDescriptionCard> {
                       child: GestureDetector(
                         onTap: () => _showMediaPopup(context, widget.sparePartImageUrl!, false),
                         child: Image(
-                          image: StorageService.getImageProvider(widget.sparePartImageUrl),
+                          image: StorageService.getImageProvider(widget.sparePartImageUrl, targetWidth: 100),
                           width: 28,
                           height: 28,
                           fit: BoxFit.cover,

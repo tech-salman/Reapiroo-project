@@ -31,6 +31,8 @@ class _CustomerOffersScreenState extends ConsumerState<CustomerOffersScreen> {
   Map<String, dynamic>? _selectedTechOffer;
 
   String _currentUserId = '';
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _offersStream;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _bidBottomSheetStream;
 
   @override
   void initState() {
@@ -40,7 +42,24 @@ class _CustomerOffersScreenState extends ConsumerState<CustomerOffersScreen> {
 
   Future<void> _loadUserId() async {
     final uid = await ChatService.getEffectiveUserId();
-    setState(() => _currentUserId = uid);
+    if (mounted) {
+      final cleanWId = widget.requestId.replaceAll('ID #', '').trim();
+      final dbService = ref.read(databaseServiceProvider);
+
+      setState(() {
+        _currentUserId = uid;
+        if (_currentUserId.isNotEmpty && cleanWId.isNotEmpty) {
+          _offersStream ??= dbService.customerBidsCollection(_currentUserId, cleanWId).snapshots();
+        } else {
+          _offersStream ??= const Stream.empty();
+        }
+        if (_currentUserId.isNotEmpty) {
+          _bidBottomSheetStream ??= dbService.streamBidsForBooking(widget.requestId, customerId: _currentUserId);
+        } else {
+          _bidBottomSheetStream ??= const Stream.empty();
+        }
+      });
+    }
   }
 
   static const List<CustomNavItem> _navItems = [
@@ -370,11 +389,7 @@ class _CustomerOffersScreenState extends ConsumerState<CustomerOffersScreen> {
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _getOffersStream() {
-    final cleanWId = widget.requestId.replaceAll('ID #', '').trim();
-    if (_currentUserId.isNotEmpty && cleanWId.isNotEmpty) {
-      return ref.read(databaseServiceProvider).customerBidsCollection(_currentUserId, cleanWId).snapshots();
-    }
-    return Stream.empty();
+    return _offersStream ?? const Stream.empty();
   }
 
   /// Real-Time Continuous 2-Way Bidding Bottom Sheet Modal
@@ -433,7 +448,7 @@ class _CustomerOffersScreenState extends ConsumerState<CustomerOffersScreen> {
                     child: _currentUserId.isEmpty 
                         ? const Center(child: CircularProgressIndicator(color: Colors.black))
                         : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: ref.read(databaseServiceProvider).streamBidsForBooking(widget.requestId, customerId: _currentUserId),
+                      stream: _bidBottomSheetStream ?? const Stream.empty(),
                       builder: (context, snapshot) {
                         final rawDocs = snapshot.data?.docs ?? [];
                         final cleanWId = widget.requestId.replaceAll('ID #', '').trim();
@@ -842,6 +857,7 @@ class _CustomerOffersScreenState extends ConsumerState<CustomerOffersScreen> {
           child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: _getOffersStream(),
             builder: (context, snapshot) {
+              debugPrint('CustomerOffersScreen StreamBuilder state: ${snapshot.connectionState}');
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(
                   child: Column(

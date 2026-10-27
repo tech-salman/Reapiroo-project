@@ -34,8 +34,17 @@ class DatabaseService {
     return key;
   }
 
+  static final Map<String, String> _canonicalTechIdCache = {};
+
   Future<String> resolveCanonicalTechId(String key) async {
     if (key.isEmpty || key == 'Reapiroo service' || key == 'customer_default') return key;
+
+    // Check in-memory cache first
+    if (_canonicalTechIdCache.containsKey(key)) {
+      return _canonicalTechIdCache[key]!;
+    }
+
+    String resolvedId = key;
 
     // 1. Direct check in techs/{key}
     try {
@@ -43,7 +52,9 @@ class DatabaseService {
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         if (data.containsKey('role') || data.containsKey('name') || data.containsKey('uid') || data.containsKey('phoneNumber')) {
-          return doc.id;
+          resolvedId = doc.id;
+          _canonicalTechIdCache[key] = resolvedId;
+          return resolvedId;
         }
       }
     } catch (_) {}
@@ -52,7 +63,9 @@ class DatabaseService {
     try {
       final qPhone = await _db.collection('techs').where('phoneNumber', isEqualTo: key).limit(1).get();
       if (qPhone.docs.isNotEmpty) {
-        return qPhone.docs.first.id;
+        resolvedId = qPhone.docs.first.id;
+        _canonicalTechIdCache[key] = resolvedId;
+        return resolvedId;
       }
     } catch (_) {}
 
@@ -60,29 +73,44 @@ class DatabaseService {
     try {
       final qUid = await _db.collection('techs').where('uid', isEqualTo: key).limit(1).get();
       if (qUid.docs.isNotEmpty) {
-        return qUid.docs.first.id;
+        resolvedId = qUid.docs.first.id;
+        _canonicalTechIdCache[key] = resolvedId;
+        return resolvedId;
       }
       final qUserId = await _db.collection('techs').where('userId', isEqualTo: key).limit(1).get();
       if (qUserId.docs.isNotEmpty) {
-        return qUserId.docs.first.id;
+        resolvedId = qUserId.docs.first.id;
+        _canonicalTechIdCache[key] = resolvedId;
+        return resolvedId;
       }
     } catch (_) {}
 
-    // 4. Check TECH_INDEX
+    // 4. Check TECH_INDEX using batched whereIn queries
     try {
       final indexDoc = await _db.collection('techs').doc('TECH_INDEX').get();
       if (indexDoc.exists && indexDoc.data() != null) {
-        final ids = indexDoc.data()?['techIds'] as List<dynamic>? ?? [];
-        for (final id in ids) {
-          final tId = id.toString();
-          if (tId == key) return tId;
-          final tDoc = await _techAccountDoc(tId).get();
-          if (tDoc.exists && tDoc.data() != null) {
-            final tData = tDoc.data()!;
-            if (tData['phoneNumber'] == key || tData['uid'] == key || tData['userId'] == key || tData['name'] == key) {
-              return tId;
+        final ids = (indexDoc.data()?['techIds'] as List<dynamic>? ?? []).map((e) => e.toString()).toList();
+        if (ids.contains(key)) {
+          resolvedId = key;
+          _canonicalTechIdCache[key] = resolvedId;
+          return resolvedId;
+        }
+        for (var i = 0; i < ids.length; i += 30) {
+          final chunk = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
+          if (chunk.isEmpty) continue;
+          try {
+            final querySnap = await _db.collection('techs')
+                .where(FieldPath.documentId, whereIn: chunk)
+                .get();
+            for (final doc in querySnap.docs) {
+              final tData = doc.data();
+              if (tData['phoneNumber'] == key || tData['uid'] == key || tData['userId'] == key || tData['name'] == key) {
+                resolvedId = doc.id;
+                _canonicalTechIdCache[key] = resolvedId;
+                return resolvedId;
+              }
             }
-          }
+          } catch (_) {}
         }
       }
     } catch (_) {}
@@ -91,11 +119,14 @@ class DatabaseService {
     try {
       final techDoc = await getTechProfile(key);
       if (techDoc.exists) {
-        return techDoc.id;
+        resolvedId = techDoc.id;
+        _canonicalTechIdCache[key] = resolvedId;
+        return resolvedId;
       }
     } catch (_) {}
 
-    return key;
+    _canonicalTechIdCache[key] = resolvedId;
+    return resolvedId;
   }
 
   DocumentReference<Map<String, dynamic>> _customerAccountDoc(String customerId) =>
@@ -150,13 +181,39 @@ class DatabaseService {
   // =========================================================================
   // PURGE LEGACY ROOT COLLECTIONS
   // =========================================================================
-  Future<void> purgeLegacyCollections() async {
-    final legacyCollections = ['bookings', 'chats', 'customer', 'requests', 'tech', 'users', 'transactions', 'tech_locations', 'email_otps', 'CUSTOMERS', 'USERS'];
+  Future<void> purgeLegacyCollections({bool enablePurge = false}) async {
+    if (!enablePurge) return;
+    final legacyCollections = [
+      'bookings',
+      'chats',
+      'customer',
+      'requests',
+      'tech',
+      'users',
+      'transactions',
+      'tech_locations',
+      'email_otps',
+      'CUSTOMERS',
+      'USERS',
+    ];
     for (final col in legacyCollections) {
       try {
         final snap = await _db.collection(col).get();
+        if (snap.docs.isEmpty) continue;
+
+        WriteBatch batch = _db.batch();
+        int count = 0;
         for (final doc in snap.docs) {
-          await doc.reference.delete();
+          batch.delete(doc.reference);
+          count++;
+          if (count >= 500) {
+            await batch.commit();
+            batch = _db.batch();
+            count = 0;
+          }
+        }
+        if (count > 0) {
+          await batch.commit();
         }
       } catch (_) {}
     }
@@ -577,6 +634,31 @@ class DatabaseService {
     );
   }
 
+  Future<List<String>> getTechUserIds() async {
+    final techSet = <String>{};
+    try {
+      final techIndexDoc = await _db.collection('techs').doc('TECH_INDEX').get();
+      if (techIndexDoc.exists) {
+        final data = techIndexDoc.data() ?? {};
+        final list = data['techIds'] as List<dynamic>? ?? [];
+        techSet.addAll(list.map((e) => e.toString()));
+      }
+    } catch (_) {}
+
+    if (techSet.isEmpty) {
+      try {
+        final techsSnap = await _db.collection('techs').limit(50).get();
+        for (var doc in techsSnap.docs) {
+          if (doc.id != 'TECH_INDEX') {
+            techSet.add(doc.id);
+          }
+        }
+      } catch (_) {}
+    }
+
+    return techSet.toList();
+  }
+
   Future<void> notifyMatchingTechniciansAndMirrorRequest({
     required String bookingId,
     required String category,
@@ -584,32 +666,9 @@ class DatabaseService {
   }) async {
     final now = FieldValue.serverTimestamp();
     try {
-      final techSet = <String>{};
-      
-      try {
-        final techIndexDoc = await _db.collection('techs').doc('TECH_INDEX').get();
-        if (techIndexDoc.exists) {
-          final data = techIndexDoc.data() ?? {};
-          final list = data['techIds'] as List<dynamic>? ?? [];
-          techSet.addAll(list.map((e) => e.toString()));
-        }
-      } catch (_) {}
+      final techIds = await getTechUserIds();
 
-      try {
-        final techsSnap = await _db.collection('techs').get();
-        for (var doc in techsSnap.docs) {
-          if (doc.id != 'TECH_INDEX') {
-            techSet.add(doc.id);
-            final data = doc.data();
-            final phone = data['phoneNumber'] as String? ?? data['phone'] as String? ?? '';
-            final uId = data['uid'] as String? ?? data['userId'] as String? ?? '';
-            if (phone.isNotEmpty) techSet.add(phone);
-            if (uId.isNotEmpty) techSet.add(uId);
-          }
-        }
-      } catch (_) {}
-
-      for (final techId in techSet) {
+      for (final techId in techIds) {
         if (techId.isEmpty || techId == 'TECH_INDEX') continue;
 
         await _db.collection('techs').doc(techId).collection('requests').doc(bookingId).set(bookingData, SetOptions(merge: true));
@@ -1356,7 +1415,7 @@ class DatabaseService {
     final newAvatar = data['avatarUrl'] as String? ?? data['profilePictureUrl'] as String? ?? '';
     if (newAvatar.isNotEmpty) {
       try {
-        final chatsSnap = await customerChatsCollection(customerId).get();
+        final chatsSnap = await customerChatsCollection(customerId).limit(50).get();
         for (var doc in chatsSnap.docs) {
           await doc.reference.update({'customerAvatar': newAvatar});
           final techId = doc.data()['techId'] as String? ?? '';
@@ -1367,7 +1426,7 @@ class DatabaseService {
             } catch (_) {}
           }
         }
-        final bookingsSnap = await customerBookingsCollection(customerId).get();
+        final bookingsSnap = await customerBookingsCollection(customerId).limit(50).get();
         for (var doc in bookingsSnap.docs) {
           await doc.reference.update({'customerAvatar': newAvatar, 'avatarUrl': newAvatar});
         }
@@ -1435,7 +1494,7 @@ class DatabaseService {
     final newAvatar = data['avatarUrl'] as String? ?? data['profilePictureUrl'] as String? ?? '';
     if (newAvatar.isNotEmpty) {
       try {
-        final chatsSnap = await techChatsCollection(techId).get();
+        final chatsSnap = await techChatsCollection(techId).limit(50).get();
         for (var doc in chatsSnap.docs) {
           await doc.reference.update({'techAvatar': newAvatar});
           final custId = doc.data()['customerId'] as String? ?? '';
@@ -1468,7 +1527,11 @@ class DatabaseService {
   CollectionReference<Map<String, dynamic>> customerReviewsCollection(String customerId) =>
       _db.collection('customers').doc(customerId).collection('reviews');
 
-  Future<List<Map<String, dynamic>>> fetchTechReviews(String key) async {
+  Future<List<Map<String, dynamic>>> fetchTechReviews(
+    String key, {
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) async {
     final canonicalId = await resolveCanonicalTechId(key);
     final universalId = await resolveUniversalCanonicalId(key);
     final List<Map<String, dynamic>> allReviews = [];
@@ -1480,7 +1543,11 @@ class DatabaseService {
     for (final k in keysToTry) {
       if (k.isEmpty) continue;
       try {
-        final snap = await techReviewsCollection(k).get();
+        Query<Map<String, dynamic>> query = techReviewsCollection(k);
+        if (startAfter != null) {
+          query = query.startAfterDocument(startAfter);
+        }
+        final snap = await query.limit(limit).get();
         for (var doc in snap.docs) {
           final data = doc.data();
           final rId = data['reviewId'] as String? ?? doc.id;
@@ -1512,9 +1579,13 @@ class DatabaseService {
 
     if (allReviews.isEmpty && key.isNotEmpty) {
       try {
-        final q1 = await _db.collection('techs').where('phoneNumber', isEqualTo: key).get();
+        final q1 = await _db.collection('techs').where('phoneNumber', isEqualTo: key).limit(1).get();
         for (var doc in q1.docs) {
-          final subSnap = await techReviewsCollection(doc.id).get();
+          Query<Map<String, dynamic>> query = techReviewsCollection(doc.id);
+          if (startAfter != null) {
+            query = query.startAfterDocument(startAfter);
+          }
+          final subSnap = await query.limit(limit).get();
           for (var rdoc in subSnap.docs) {
             final data = rdoc.data();
             final rId = data['reviewId'] as String? ?? rdoc.id;
@@ -1539,6 +1610,77 @@ class DatabaseService {
     }
 
     return allReviews;
+  }
+
+  // =========================================================================
+  // PAGINATED FETCH HELPERS (Capped with cursor support)
+  // =========================================================================
+
+  Future<QuerySnapshot<Map<String, dynamic>>> fetchCustomerBookings(
+    String customerId, {
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) async {
+    Query<Map<String, dynamic>> query = customerBookingsCollection(customerId).orderBy('createdAt', descending: true);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    return await query.limit(limit).get();
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> fetchTechRequests(
+    String techId, {
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) async {
+    Query<Map<String, dynamic>> query = techRequestsCollection(techId).orderBy('createdAt', descending: true);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    return await query.limit(limit).get();
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> fetchUserNotifications(
+    String userId, {
+    bool isTech = false,
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) async {
+    final collection = isTech ? techNotifsCollection(userId) : customerNotifsCollection(userId);
+    Query<Map<String, dynamic>> query = collection.orderBy('createdAt', descending: true);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    return await query.limit(limit).get();
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> fetchUserTransactions(
+    String userId, {
+    bool isTech = false,
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) async {
+    final collection = isTech ? techTransactionsCollection(userId) : customerTransactionsCollection(userId);
+    Query<Map<String, dynamic>> query = collection.orderBy('timestamp', descending: true);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    return await query.limit(limit).get();
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> fetchChatMessages(
+    String userId,
+    String chatId, {
+    bool isTech = false,
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) async {
+    final collection = isTech ? techMessagesCollection(userId, chatId) : customerMessagesCollection(userId, chatId);
+    Query<Map<String, dynamic>> query = collection.orderBy('timestamp', descending: true);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    return await query.limit(limit).get();
   }
 
   Future<void> submitTechnicianReview({

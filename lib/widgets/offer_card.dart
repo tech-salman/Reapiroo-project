@@ -16,6 +16,21 @@ class OfferCard extends StatelessWidget {
     required this.onBid,
   });
 
+  static final Map<String, Future<String>> _avatarFutureCache = {};
+
+  Future<String> _getAvatarFuture(String techId, String initialAvatarUrl) {
+    if (initialAvatarUrl.isNotEmpty) {
+      return Future.value(initialAvatarUrl);
+    }
+    if (techId.isEmpty) {
+      return Future.value('');
+    }
+    return _avatarFutureCache.putIfAbsent(
+      techId,
+      () => DatabaseService().getUniversalUserAvatar(techId),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final techName = offer['techName'] as String? ?? 'Technician';
@@ -62,14 +77,14 @@ class OfferCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             FutureBuilder<String>(
-              future: initialAvatarUrl.isNotEmpty ? Future.value(initialAvatarUrl) : DatabaseService().getUniversalUserAvatar(techId),
+              future: _getAvatarFuture(techId, initialAvatarUrl),
               builder: (context, snapshot) {
                 final avatarUrl = snapshot.data ?? initialAvatarUrl;
                 return ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: avatarUrl.isNotEmpty
                       ? Image(
-                          image: StorageService.getImageProvider(avatarUrl),
+                          image: StorageService.getImageProvider(avatarUrl, targetWidth: 200),
                           width: 85,
                           height: 85,
                           fit: BoxFit.cover,

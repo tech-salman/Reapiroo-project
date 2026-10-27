@@ -13,6 +13,339 @@ import 'package:reapiroo/screens/tech/tech_wallet_screen.dart';
 import 'package:reapiroo/screens/tech/tech_notification_screen.dart';
 import 'package:reapiroo/screens/tech/task_description_screen.dart';
 
+class TechHeaderBar extends StatelessWidget {
+  final VoidCallback onWalletPressed;
+  final VoidCallback onNotificationPressed;
+
+  const TechHeaderBar({
+    super.key,
+    required this.onWalletPressed,
+    required this.onNotificationPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: const BoxDecoration(
+            color: Colors.black,
+            shape: BoxShape.circle,
+          ),
+          child: Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu, color: Colors.white, size: 24),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
+        ),
+        const Spacer(),
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.credit_card, color: Colors.white, size: 22),
+            onPressed: onWalletPressed,
+          ),
+        ),
+        const SizedBox(width: 10),
+        NotificationBellButton(
+          isTech: true,
+          backgroundColor: Colors.black,
+          onPressed: onNotificationPressed,
+        ),
+      ],
+    );
+  }
+}
+
+class TechBannerWidget extends StatelessWidget {
+  const TechBannerWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 115,
+      decoration: BoxDecoration(
+        color: const Color(0xFF00B4D8),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          children: [
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 190,
+              child: Image.network(
+                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&auto=format&fit=crop&q=60',
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const ColoredBox(color: Colors.black12),
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF00A8E8),
+                    const Color(0xFF00A8E8).withValues(alpha: 0.9),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.55, 0.8],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              alignment: Alignment.centerLeft,
+              child: const Text(
+                'Ultimate Guide to\nApp Advertising',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class TechBalanceAvailabilityCard extends StatelessWidget {
+  final double balance;
+  final bool isAvailable;
+  final VoidCallback onWalletTap;
+  final ValueChanged<bool> onAvailabilityChanged;
+
+  const TechBalanceAvailabilityCard({
+    super.key,
+    required this.balance,
+    required this.isAvailable,
+    required this.onWalletTap,
+    required this.onAvailabilityChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E5EA)),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: onWalletTap,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.credit_card, size: 20, color: Colors.black),
+                          SizedBox(width: 6),
+                          Text(
+                            'Balance',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${balance.toStringAsFixed(2)} AED',
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE5E5EA)),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Availability',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () => onAvailabilityChanged(!isAvailable),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 48,
+                        height: 26,
+                        padding: const EdgeInsets.all(2.5),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(13),
+                          color: isAvailable ? const Color(0xFF99E274) : Colors.grey.shade300,
+                        ),
+                        child: Align(
+                          alignment: isAvailable ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Container(
+                            width: 21,
+                            height: 21,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isAvailable ? const Color(0xFF00C814) : Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class TechFilterRow extends StatelessWidget {
+  final String selectedService;
+  final List<String> services;
+  final ValueChanged<String?> onServiceChanged;
+  final String selectedSort;
+  final ValueChanged<String?> onSortChanged;
+
+  const TechFilterRow({
+    super.key,
+    required this.selectedService,
+    required this.services,
+    required this.onServiceChanged,
+    required this.selectedSort,
+    required this.onSortChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 190),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedService,
+              isDense: true,
+              dropdownColor: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(16),
+              icon: const Padding(
+                padding: EdgeInsets.only(left: 4),
+                child: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+              ),
+              selectedItemBuilder: (BuildContext context) {
+                return services.map<Widget>((String item) {
+                  return ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(
+                      item,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
+                }).toList();
+              },
+              items: services.map((String service) {
+                return DropdownMenuItem<String>(
+                  value: service,
+                  child: Text(
+                    service,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: onServiceChanged,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: selectedSort,
+              isDense: true,
+              dropdownColor: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(16),
+              icon: const Padding(
+                padding: EdgeInsets.only(left: 4),
+                child: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+              ),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+              items: const [
+                DropdownMenuItem(value: 'Nearest', child: Text('Nearest')),
+                DropdownMenuItem(value: 'Highest Rated', child: Text('Highest Rated')),
+                DropdownMenuItem(value: 'Lowest Price', child: Text('Lowest Price')),
+              ],
+              onChanged: onSortChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class TechHomeScreen extends ConsumerStatefulWidget {
   final bool embedInShell;
 
@@ -31,6 +364,7 @@ class _TechHomeScreenState extends ConsumerState<TechHomeScreen> {
   String _userName = 'Technician';
   String _userKey = '';
   StreamSubscription? _techProfileSub;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _requestsStream;
 
   final List<String> _services = [
     'All Services',
@@ -74,6 +408,9 @@ class _TechHomeScreenState extends ConsumerState<TechHomeScreen> {
     setState(() {
       _userKey = key;
       _userName = prefs.getString('firstName') ?? prefs.getString('tech_firstName') ?? 'Technician';
+      if (key.isNotEmpty) {
+        _requestsStream = dbService.techRequestsCollection(key).snapshots();
+      }
     });
 
     if (key.isNotEmpty) {
@@ -159,7 +496,20 @@ class _TechHomeScreenState extends ConsumerState<TechHomeScreen> {
         // Fixed Header pinned above the scroll view
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: _buildHeader(),
+          child: TechHeaderBar(
+            onWalletPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TechWalletScreen()),
+              );
+            },
+            onNotificationPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const TechNotificationScreen()),
+              );
+            },
+          ),
         ),
         // Scrollable content underneath the static header
         Expanded(
@@ -184,13 +534,41 @@ class _TechHomeScreenState extends ConsumerState<TechHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                _buildBanner(),
+                const TechBannerWidget(),
                 const SizedBox(height: 14),
                 const AppInfoCardsScrollView(),
                 const SizedBox(height: 14),
-                _buildBalanceAvailabilityCard(),
+                TechBalanceAvailabilityCard(
+                  balance: _balance,
+                  isAvailable: _isAvailable,
+                  onWalletTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const TechWalletScreen()),
+                    );
+                  },
+                  onAvailabilityChanged: (val) => _promptToggleAvailability(val),
+                ),
                 const SizedBox(height: 14),
-                _buildFilterRow(),
+                TechFilterRow(
+                  selectedService: _selectedService,
+                  services: _services,
+                  onServiceChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _selectedService = val;
+                      });
+                    }
+                  },
+                  selectedSort: _selectedSort,
+                  onSortChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _selectedSort = val;
+                      });
+                    }
+                  },
+                ),
                 const SizedBox(height: 14),
                 _buildActiveRequestsStream(),
               ],
@@ -198,327 +576,6 @@ class _TechHomeScreenState extends ConsumerState<TechHomeScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  // --- TOP BAR ---
-  Widget _buildHeader() {
-    return Row(
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: const BoxDecoration(
-            color: Colors.black,
-            shape: BoxShape.circle,
-          ),
-          child: Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.menu, color: Colors.white, size: 24),
-              onPressed: () => Scaffold.of(context).openDrawer(),
-            ),
-          ),
-        ),
-        const Spacer(),
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: IconButton(
-            icon: const Icon(Icons.credit_card, color: Colors.white, size: 22),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const TechWalletScreen()),
-              );
-            },
-          ),
-        ),
-        const SizedBox(width: 10),
-        NotificationBellButton(
-          isTech: true,
-          backgroundColor: Colors.black,
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const TechNotificationScreen()),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  // --- BANNER ---
-  Widget _buildBanner() {
-    return Container(
-      width: double.infinity,
-      height: 115,
-      decoration: BoxDecoration(
-        color: const Color(0xFF00B4D8),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Stack(
-          children: [
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: 190,
-              child: Image.network(
-                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&auto=format&fit=crop&q=60',
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const ColoredBox(color: Colors.black12),
-              ),
-            ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    const Color(0xFF00A8E8),
-                    const Color(0xFF00A8E8).withValues(alpha: 0.9),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.55, 0.8],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-              alignment: Alignment.centerLeft,
-              child: const Text(
-                'Ultimate Guide to\nApp Advertising',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  height: 1.2,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- BALANCE & AVAILABILITY ---
-  Widget _buildBalanceAvailabilityCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5E5EA)),
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const TechWalletScreen()),
-                  );
-                },
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.credit_card, size: 20, color: Colors.black),
-                          SizedBox(width: 6),
-                          Text(
-                            'Balance',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${_balance.toStringAsFixed(2)} AED',
-                        style: const TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFE5E5EA)),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Availability',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    GestureDetector(
-                      onTap: () => _promptToggleAvailability(!_isAvailable),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 48,
-                        height: 26,
-                        padding: const EdgeInsets.all(2.5),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(13),
-                          color: _isAvailable ? const Color(0xFF99E274) : Colors.grey.shade300,
-                        ),
-                        child: Align(
-                          alignment: _isAvailable ? Alignment.centerRight : Alignment.centerLeft,
-                          child: Container(
-                            width: 21,
-                            height: 21,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _isAvailable ? const Color(0xFF00C814) : Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- FILTERS ---
-  Widget _buildFilterRow() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _buildServiceDropdown(),
-        const SizedBox(width: 8),
-        _buildSortDropdown(),
-      ],
-    );
-  }
-
-  Widget _buildServiceDropdown() {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 190),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedService,
-          isDense: true,
-          dropdownColor: const Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.circular(16),
-          icon: const Padding(
-            padding: EdgeInsets.only(left: 4),
-            child: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
-          ),
-          selectedItemBuilder: (BuildContext context) {
-            return _services.map<Widget>((String item) {
-              return ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 120),
-                child: Text(
-                  item,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              );
-            }).toList();
-          },
-          items: _services.map((String service) {
-            return DropdownMenuItem<String>(
-              value: service,
-              child: Text(
-                service,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              ),
-            );
-          }).toList(),
-          onChanged: (String? newValue) {
-            if (newValue != null) {
-              setState(() {
-                _selectedService = newValue;
-              });
-            }
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSortDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedSort,
-          isDense: true,
-          dropdownColor: const Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.circular(16),
-          icon: const Padding(
-            padding: EdgeInsets.only(left: 4),
-            child: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
-          ),
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-          ),
-          items: const [
-            DropdownMenuItem(value: 'Nearest', child: Text('Nearest')),
-            DropdownMenuItem(value: 'Highest Rated', child: Text('Highest Rated')),
-            DropdownMenuItem(value: 'Lowest Price', child: Text('Lowest Price')),
-          ],
-          onChanged: (String? newValue) {
-            if (newValue != null) {
-              setState(() {
-                _selectedSort = newValue;
-              });
-            }
-          },
-        ),
-      ),
     );
   }
 
@@ -561,8 +618,9 @@ class _TechHomeScreenState extends ConsumerState<TechHomeScreen> {
       );
     }
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: ref.read(databaseServiceProvider).techRequestsCollection(_userKey).snapshots(),
+      stream: _requestsStream ?? const Stream.empty(),
       builder: (context, snapshot) {
+        debugPrint('TechHomeScreen StreamBuilder state: ${snapshot.connectionState}');
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: Padding(
@@ -676,5 +734,4 @@ class _TechHomeScreenState extends ConsumerState<TechHomeScreen> {
       },
     );
   }
-
 }

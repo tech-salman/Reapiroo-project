@@ -141,42 +141,59 @@ class StorageService {
   }
 
   /// Helper to convert a stored Base64 string, local File path, or HTTP/HTTPS/Blob URL into a Flutter ImageProvider.
-  static ImageProvider getImageProvider(String? urlOrPath, {String? defaultUrl}) {
+  static ImageProvider getImageProvider(String? urlOrPath, {String? defaultUrl, int? targetWidth, int? targetHeight}) {
     final fallback = defaultUrl ?? '';
     if (urlOrPath == null || urlOrPath.trim().isEmpty) {
-      return NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
+      final img = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
+      return (targetWidth != null || targetHeight != null)
+          ? ResizeImage(img, width: targetWidth, height: targetHeight)
+          : img;
     }
     final clean = urlOrPath.trim();
 
+    ImageProvider imageProvider;
+
     // 0. Asset Image Path
     if (clean.startsWith('assets/')) {
-      return AssetImage(clean);
+      imageProvider = AssetImage(clean);
     }
-
     // 1. Base64 Data URI or raw Base64 string
-    if (clean.startsWith('data:image') || clean.length > 300) {
+    else if (clean.startsWith('data:image') || clean.length > 300) {
       try {
         final base64Clean = clean.contains(',') ? clean.split(',').last : clean;
         final bytes = base64Decode(base64Clean);
-        return MemoryImage(bytes);
-      } catch (_) {}
+        imageProvider = MemoryImage(bytes);
+      } catch (_) {
+        imageProvider = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
+      }
     }
-
     // 2. Network URL or Web Blob URL
-    if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('blob:')) {
-      return NetworkImage(clean);
+    else if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('blob:')) {
+      imageProvider = NetworkImage(clean);
     }
-
     // 3. Local File Path (if present on mobile/desktop device)
-    if (!kIsWeb) {
+    else if (!kIsWeb) {
       try {
         final file = File(clean);
         if (file.existsSync()) {
-          return FileImage(file);
+          imageProvider = FileImage(file);
+        } else {
+          imageProvider = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
         }
-      } catch (_) {}
+      } catch (_) {
+        imageProvider = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
+      }
+    } else {
+      imageProvider = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
     }
 
-    return NetworkImage(fallback);
+    if (targetWidth != null || targetHeight != null) {
+      return ResizeImage(imageProvider, width: targetWidth, height: targetHeight);
+    }
+    if (imageProvider is NetworkImage) {
+      return ResizeImage(imageProvider, width: targetWidth ?? 500, height: targetHeight);
+    }
+
+    return imageProvider;
   }
 }

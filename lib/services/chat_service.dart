@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -140,92 +141,178 @@ class ChatService {
     );
   }
 
+  Stream<T> _combineQuerySnapshotStreams<T, S1, S2>(
+    Stream<S1> stream1,
+    Stream<S2> stream2,
+    T Function(S1? data1, S2? data2) combiner,
+  ) {
+    late StreamController<T> controller;
+    S1? latest1;
+    S2? latest2;
+
+    StreamSubscription? sub1;
+    StreamSubscription? sub2;
+
+    controller = StreamController<T>(
+      onListen: () {
+        sub1 = stream1.listen(
+          (data) {
+            latest1 = data;
+            controller.add(combiner(latest1, latest2));
+          },
+          onError: controller.addError,
+        );
+        sub2 = stream2.listen(
+          (data) {
+            latest2 = data;
+            controller.add(combiner(latest1, latest2));
+          },
+          onError: controller.addError,
+        );
+      },
+      onCancel: () {
+        sub1?.cancel();
+        sub2?.cancel();
+      },
+    );
+
+    return controller.stream;
+  }
+
   Stream<List<ChatMessageModel>> getMessagesStream(
     String chatId, {
     required String currentUserId,
     bool isTech = false,
-  }) {
-    final collection = isTech
+  }) async* {
+    final prefs = await SharedPreferences.getInstance();
+    final phone = prefs.getString('phoneNumber') ?? '';
+    final authUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final altId = (currentUserId == authUid) ? phone : authUid;
+
+    final primaryCollection = isTech
         ? _dbService.techMessagesCollection(currentUserId, chatId)
         : _dbService.customerMessagesCollection(currentUserId, chatId);
 
-    return collection.snapshots().asyncMap((snapshot) async {
-      final messages = <ChatMessageModel>[];
-      final seenIds = <String>{};
+    if (altId.isEmpty || altId == currentUserId) {
+      yield* primaryCollection.snapshots().map((snapshot) {
+        final messages = <ChatMessageModel>[];
+        final seenIds = <String>{};
 
-      for (var doc in snapshot.docs) {
-        if (seenIds.add(doc.id)) {
-          messages.add(ChatMessageModel.fromMap(doc.data(), docId: doc.id, currentUserId: currentUserId));
-        }
-      }
-
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final phone = prefs.getString('phoneNumber') ?? '';
-        final authUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-        final altId = (currentUserId == authUid) ? phone : authUid;
-
-        if (altId.isNotEmpty && altId != currentUserId) {
-          final altCollection = isTech
-              ? _dbService.techMessagesCollection(altId, chatId)
-              : _dbService.customerMessagesCollection(altId, chatId);
-          final altSnap = await altCollection.get();
-          for (var doc in altSnap.docs) {
-            if (seenIds.add(doc.id)) {
-              messages.add(ChatMessageModel.fromMap(doc.data(), docId: doc.id, currentUserId: currentUserId));
-            }
+        for (var doc in snapshot.docs) {
+          if (seenIds.add(doc.id)) {
+            messages.add(ChatMessageModel.fromMap(doc.data(), docId: doc.id, currentUserId: currentUserId));
           }
         }
-      } catch (_) {}
 
-      messages.sort((a, b) {
-        final aTime = a.timestamp ?? DateTime.now();
-        final bTime = b.timestamp ?? DateTime.now();
-        return aTime.compareTo(bTime);
+        messages.sort((a, b) {
+          final aTime = a.timestamp ?? DateTime.now();
+          final bTime = b.timestamp ?? DateTime.now();
+          return aTime.compareTo(bTime);
+        });
+        return messages;
       });
-      return messages;
-    });
+    } else {
+      final altCollection = isTech
+          ? _dbService.techMessagesCollection(altId, chatId)
+          : _dbService.customerMessagesCollection(altId, chatId);
+
+      yield* _combineQuerySnapshotStreams(
+        primaryCollection.snapshots(),
+        altCollection.snapshots(),
+        (snapshot1, snapshot2) {
+          final messages = <ChatMessageModel>[];
+          final seenIds = <String>{};
+
+          if (snapshot1 != null) {
+            for (var doc in snapshot1.docs) {
+              if (seenIds.add(doc.id)) {
+                messages.add(ChatMessageModel.fromMap(doc.data(), docId: doc.id, currentUserId: currentUserId));
+              }
+            }
+          }
+          if (snapshot2 != null) {
+            for (var doc in snapshot2.docs) {
+              if (seenIds.add(doc.id)) {
+                messages.add(ChatMessageModel.fromMap(doc.data(), docId: doc.id, currentUserId: currentUserId));
+              }
+            }
+          }
+
+          messages.sort((a, b) {
+            final aTime = a.timestamp ?? DateTime.now();
+            final bTime = b.timestamp ?? DateTime.now();
+            return aTime.compareTo(bTime);
+          });
+          return messages;
+        },
+      );
+    }
   }
 
-  Stream<List<ChatThreadModel>> getUserChatThreads(String userId, {bool isTech = false}) {
-    final collection = isTech
+  Stream<List<ChatThreadModel>> getUserChatThreads(String userId, {bool isTech = false}) async* {
+    final prefs = await SharedPreferences.getInstance();
+    final phone = prefs.getString('phoneNumber') ?? '';
+    final authUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final altId = (userId == authUid) ? phone : authUid;
+
+    final primaryCollection = isTech
         ? _dbService.techChatsCollection(userId)
         : _dbService.customerChatsCollection(userId);
 
-    return collection.snapshots().asyncMap((snapshot) async {
-      final threads = <ChatThreadModel>[];
-      final seen = <String>{};
+    if (altId.isEmpty || altId == userId) {
+      yield* primaryCollection.snapshots().map((snapshot) {
+        final threads = <ChatThreadModel>[];
+        final seen = <String>{};
 
-      for (var doc in snapshot.docs) {
-        if (seen.add(doc.id)) {
-          threads.add(ChatThreadModel.fromMap(doc.data(), docId: doc.id));
-        }
-      }
-
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final phone = prefs.getString('phoneNumber') ?? '';
-        final authUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-        final altId = (userId == authUid) ? phone : authUid;
-
-        if (altId.isNotEmpty && altId != userId) {
-          final altColl = isTech ? _dbService.techChatsCollection(altId) : _dbService.customerChatsCollection(altId);
-          final altSnap = await altColl.get();
-          for (var doc in altSnap.docs) {
-            if (seen.add(doc.id)) {
-              threads.add(ChatThreadModel.fromMap(doc.data(), docId: doc.id));
-            }
+        for (var doc in snapshot.docs) {
+          if (seen.add(doc.id)) {
+            threads.add(ChatThreadModel.fromMap(doc.data(), docId: doc.id));
           }
         }
-      } catch (_) {}
 
-      threads.sort((a, b) {
-        final aTime = a.lastMessageTimestamp ?? DateTime(2000);
-        final bTime = b.lastMessageTimestamp ?? DateTime(2000);
-        return bTime.compareTo(aTime);
+        threads.sort((a, b) {
+          final aTime = a.lastMessageTimestamp ?? DateTime(2000);
+          final bTime = b.lastMessageTimestamp ?? DateTime(2000);
+          return bTime.compareTo(aTime);
+        });
+        return threads;
       });
-      return threads;
-    });
+    } else {
+      final altCollection = isTech
+          ? _dbService.techChatsCollection(altId)
+          : _dbService.customerChatsCollection(altId);
+
+      yield* _combineQuerySnapshotStreams(
+        primaryCollection.snapshots(),
+        altCollection.snapshots(),
+        (snapshot1, snapshot2) {
+          final threads = <ChatThreadModel>[];
+          final seen = <String>{};
+
+          if (snapshot1 != null) {
+            for (var doc in snapshot1.docs) {
+              if (seen.add(doc.id)) {
+                threads.add(ChatThreadModel.fromMap(doc.data(), docId: doc.id));
+              }
+            }
+          }
+          if (snapshot2 != null) {
+            for (var doc in snapshot2.docs) {
+              if (seen.add(doc.id)) {
+                threads.add(ChatThreadModel.fromMap(doc.data(), docId: doc.id));
+              }
+            }
+          }
+
+          threads.sort((a, b) {
+            final aTime = a.lastMessageTimestamp ?? DateTime(2000);
+            final bTime = b.lastMessageTimestamp ?? DateTime(2000);
+            return bTime.compareTo(aTime);
+          });
+          return threads;
+        },
+      );
+    }
   }
 
   Future<void> markMessagesAsRead(String chatId, String currentUserId, {bool isTech = false}) async {

@@ -34,19 +34,49 @@ class _RealtimeAlertListenerState extends State<RealtimeAlertListener> {
   }
 
   @override
+  void didUpdateWidget(covariant RealtimeAlertListener oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isTech != widget.isTech) {
+      _currentUserId = '';
+      _initListeners();
+    }
+  }
+
+  @override
   void dispose() {
     _notifSub?.cancel();
     _chatSub?.cancel();
+    _notifSub = null;
+    _chatSub = null;
     super.dispose();
   }
 
   Future<void> _initListeners() async {
     final userId = await ChatService.getEffectiveUserId();
     if (!mounted || userId.isEmpty || userId == 'demo_user') return;
+
+    // Avoid creating new listeners if _currentUserId hasn't changed
+    if (_currentUserId == userId && (_notifSub != null || _chatSub != null)) {
+      return;
+    }
+
+    _notifSub?.cancel();
+    _chatSub?.cancel();
+    _notifSub = null;
+    _chatSub = null;
+
     _currentUserId = userId;
 
-    // 1. Listen to Realtime Notifications
-    _notifSub = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').collectionGroup('notifications').snapshots().listen((snap) {
+    final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database');
+    final rootCollection = widget.isTech ? 'techs' : 'customers';
+
+    // 1. Listen to Realtime Notifications for current user
+    _notifSub = db
+        .collection(rootCollection)
+        .doc(_currentUserId)
+        .collection('notifications')
+        .snapshots()
+        .listen((snap) {
       if (!mounted) return;
       if (_isInitialNotificationLoad) {
         for (final doc in snap.docs) {
@@ -57,60 +87,66 @@ class _RealtimeAlertListenerState extends State<RealtimeAlertListener> {
       }
 
       for (final change in snap.docChanges) {
-        if (change.type == DocumentChangeType.added) {
+        if (change.type == DocumentChangeType.added || change.type == DocumentChangeType.modified) {
           final docId = change.doc.id;
-          if (_seenNotificationIds.contains(docId)) continue;
-          _seenNotificationIds.add(docId);
-
           final data = change.doc.data();
-          final path = change.doc.reference.path;
-          final isRead = data != null ? (data['isRead'] as bool? ?? false) : false;
+          if (data == null) continue;
 
+          final isRead = data['isRead'] as bool? ?? false;
           if (!isRead) {
-            bool isRelevant = false;
-            if (widget.isTech && path.contains('techs')) {
-              isRelevant = true;
-            } else if (!widget.isTech && path.contains('customers')) {
-              isRelevant = true;
-            }
+            if (_seenNotificationIds.contains(docId)) continue;
+            _seenNotificationIds.add(docId);
 
-            if (isRelevant) {
-              final title = data != null ? (data['title'] as String? ?? 'New Notification') : 'New Notification';
-              final body = data != null ? (data['body'] as String? ?? data['description'] as String? ?? '') : '';
-              _showAlertBanner(title, body, Icons.notifications_active, const Color(0xFF2F80ED));
-            }
+            final title = data['title'] as String? ?? 'New Notification';
+            final body = data['body'] as String? ?? data['description'] as String? ?? '';
+            _showAlertBanner(title, body, Icons.notifications_active, const Color(0xFF2F80ED));
           }
         }
       }
     });
 
-    // 2. Listen to Realtime Chat Messages
-    _chatSub = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').collectionGroup('messages').snapshots().listen((snap) {
+    // 2. Listen to Realtime Chat Updates for current user
+    _chatSub = db
+        .collection(rootCollection)
+        .doc(_currentUserId)
+        .collection('chats')
+        .snapshots()
+        .listen((snap) {
       if (!mounted) return;
       if (_isInitialMessageLoad) {
         for (final doc in snap.docs) {
-          _seenMessageIds.add(doc.id);
+          final data = doc.data();
+          if (data != null) {
+            final lastMsgTime = data['lastMessageTimestamp']?.toString() ?? data['updatedAt']?.toString() ?? '';
+            _seenMessageIds.add('${doc.id}_$lastMsgTime');
+          }
         }
         _isInitialMessageLoad = false;
         return;
       }
 
       for (final change in snap.docChanges) {
-        if (change.type == DocumentChangeType.added) {
-          final docId = change.doc.id;
-          if (_seenMessageIds.contains(docId)) continue;
-          _seenMessageIds.add(docId);
-
+        if (change.type == DocumentChangeType.added || change.type == DocumentChangeType.modified) {
           final data = change.doc.data();
-          final senderId = data != null ? (data['senderId'] as String? ?? '') : '';
-          final receiverId = data != null ? (data['receiverId'] as String? ?? '') : '';
-          final text = data != null ? (data['text'] as String? ?? '') : '';
-          final isRead = data != null ? (data['isRead'] as bool? ?? false) : false;
-          final path = change.doc.reference.path;
+          if (data == null) continue;
 
-          bool isForMe = receiverId == _currentUserId || path.contains(_currentUserId);
-          if (!isRead && senderId != _currentUserId && isForMe) {
-            final senderName = data != null ? (data['senderName'] as String? ?? 'New Message') : 'New Message';
+          final lastSenderId = data['lastSenderId'] as String? ?? data['senderId'] as String? ?? '';
+          final unreadCount = (data['unreadCount'] as num?)?.toInt() ?? 0;
+          final isRead = data['isRead'] as bool? ?? true;
+
+          if (lastSenderId != _currentUserId && (unreadCount > 0 || !isRead)) {
+            final lastMsgTime = data['lastMessageTimestamp']?.toString() ?? data['updatedAt']?.toString() ?? '';
+            final msgKey = '${change.doc.id}_$lastMsgTime';
+
+            if (_seenMessageIds.contains(msgKey)) continue;
+            _seenMessageIds.add(msgKey);
+
+            final text = data['lastMessage'] as String? ?? 'New message';
+            final defaultSenderName = widget.isTech ? 'Customer' : 'Technician';
+            final senderName = widget.isTech
+                ? (data['customerName'] as String? ?? defaultSenderName)
+                : (data['techName'] as String? ?? defaultSenderName);
+
             _showAlertBanner('New Message from $senderName', text, Icons.chat_bubble_rounded, const Color(0xFF10B981));
           }
         }

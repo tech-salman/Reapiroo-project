@@ -43,10 +43,12 @@ class _TechChatDetailScreenState extends ConsumerState<TechChatDetailScreen> {
   String _effectiveChatId = '';
   String _effectivePeerId = '';
   String _effectiveAvatar = '';
+  String _resolvedPeerName = 'Customer';
 
   @override
   void initState() {
     super.initState();
+    _resolvedPeerName = widget.userName.isNotEmpty && widget.userName != 'Technician' ? widget.userName : 'Customer';
     _effectivePeerId = widget.peerId.isNotEmpty ? widget.peerId : 'cust_demo';
     _effectiveChatId = widget.chatId.isNotEmpty
         ? widget.chatId
@@ -65,6 +67,18 @@ class _TechChatDetailScreenState extends ConsumerState<TechChatDetailScreen> {
     final userId = await ChatService.getEffectiveUserId();
     final techId = await dbService.resolveCanonicalTechId(userId);
     final customerId = (_effectivePeerId == 'Reapiroo service') ? 'Reapiroo service' : await dbService.resolveUniversalCanonicalId(_effectivePeerId);
+
+    if (_resolvedPeerName == 'Customer' || _resolvedPeerName.isEmpty) {
+      try {
+        final custDoc = await dbService.getCustomerProfile(customerId);
+        if (custDoc.exists && custDoc.data() != null) {
+          final cName = custDoc.data()?['name'] as String? ?? custDoc.data()?['fullName'] as String? ?? '';
+          if (cName.isNotEmpty) {
+            _resolvedPeerName = cName;
+          }
+        }
+      } catch (_) {}
+    }
 
     final fname = prefs.getString('firstName') ?? prefs.getString('tech_firstName') ?? 'Technician';
     final lname = prefs.getString('lastName') ?? prefs.getString('tech_lastName') ?? '';
@@ -91,7 +105,7 @@ class _TechChatDetailScreenState extends ConsumerState<TechChatDetailScreen> {
         customerId: customerId,
         techId: techId,
         bookingId: widget.bookingId,
-        customerName: widget.userName,
+        customerName: _resolvedPeerName,
         customerAvatar: _effectiveAvatar,
         techName: _currentUserName,
       );
@@ -162,7 +176,7 @@ class _TechChatDetailScreenState extends ConsumerState<TechChatDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.userName,
+                    _resolvedPeerName,
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
                   ),
                   const Text(

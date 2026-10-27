@@ -47,18 +47,46 @@ class _TaskDescriptionScreenState extends ConsumerState<TaskDescriptionScreen> {
 
   String _currentTechId = '';
   String _status = 'pending';
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _requestStreamInstance;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _bidsStreamInstance;
 
   @override
   void initState() {
     super.initState();
     _currentNavIndex = widget.initialIndex;
+    _initStreams();
     _loadRequestData();
     _loadUserId();
   }
 
+  void _initStreams() {
+    if (widget.requestId != null && widget.requestId!.isNotEmpty) {
+      final techId = _currentTechId.isNotEmpty ? _currentTechId : 'tech_demo';
+      _requestStreamInstance = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database')
+          .collection('techs')
+          .doc(techId)
+          .collection('requests')
+          .doc(widget.requestId)
+          .snapshots();
+
+      _bidsStreamInstance = ref.read(databaseServiceProvider).streamBidsForBooking(
+        widget.requestId!,
+        techId: _currentTechId.isNotEmpty ? _currentTechId : null,
+      );
+    } else {
+      _requestStreamInstance = const Stream.empty();
+      _bidsStreamInstance = const Stream.empty();
+    }
+  }
+
   Future<void> _loadUserId() async {
     final uid = await ChatService.getEffectiveUserId();
-    if (mounted) setState(() => _currentTechId = uid);
+    if (mounted) {
+      setState(() {
+        _currentTechId = uid;
+        _initStreams();
+      });
+    }
   }
 
   Future<void> _loadRequestData() async {
@@ -188,13 +216,7 @@ class _TaskDescriptionScreenState extends ConsumerState<TaskDescriptionScreen> {
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> _requestStream() {
-    if (widget.requestId == null || widget.requestId!.isEmpty) {
-      return const Stream.empty();
-    }
-    if (_currentTechId.isNotEmpty) {
-      return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').collection('techs').doc(_currentTechId).collection('requests').doc(widget.requestId).snapshots();
-    }
-    return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').collection('techs').doc('tech_demo').collection('requests').doc(widget.requestId).snapshots();
+    return _requestStreamInstance ?? const Stream.empty();
   }
 
   @override
@@ -202,20 +224,38 @@ class _TaskDescriptionScreenState extends ConsumerState<TaskDescriptionScreen> {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: _requestStream(),
       builder: (context, snapshot) {
+        debugPrint('TaskDescriptionScreen StreamBuilder state: ${snapshot.connectionState}');
         if (snapshot.hasData && snapshot.data!.exists && snapshot.data!.data() != null) {
           final data = snapshot.data!.data()!;
-          _serviceName = data['title'] as String? ?? _serviceName;
-          _location = data['address'] as String? ?? _location;
-          _description = data['description'] as String? ?? _description;
-          _status = data['status'] as String? ?? _status;
-          _serviceImageUrl = data['serviceImageUrl'] as String? ?? _serviceImageUrl;
-          _sparePartImageUrl = data['sparePartImageUrl'] as String?;
-          _voiceNoteUrl = data['voiceNoteUrl'] as String? ?? data['audioUrl'] as String? ?? _voiceNoteUrl;
-          if (data['mediaUrls'] != null && data['mediaUrls'] is List) {
-            _mediaUrls = List<String>.from(data['mediaUrls']);
+          final sName = data['title'] as String? ?? _serviceName;
+          final loc = data['address'] as String? ?? _location;
+          final desc = data['description'] as String? ?? _description;
+          final st = data['status'] as String? ?? _status;
+          final sImg = data['serviceImageUrl'] as String? ?? _serviceImageUrl;
+          final spImg = data['sparePartImageUrl'] as String?;
+          final vNote = data['voiceNoteUrl'] as String? ?? data['audioUrl'] as String?;
+          final mUrls = data['mediaUrls'] != null && data['mediaUrls'] is List ? List<String>.from(data['mediaUrls']) : _mediaUrls;
+          final lat = (data['latitude'] as num?)?.toDouble() ?? _latitude;
+          final lng = (data['longitude'] as num?)?.toDouble() ?? _longitude;
+
+          if (sName != _serviceName || loc != _location || desc != _description || st != _status || lat != _latitude || lng != _longitude) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                setState(() {
+                  _serviceName = sName;
+                  _location = loc;
+                  _description = desc;
+                  _status = st;
+                  _serviceImageUrl = sImg;
+                  _sparePartImageUrl = spImg;
+                  _voiceNoteUrl = vNote;
+                  _mediaUrls = mUrls;
+                  _latitude = lat;
+                  _longitude = lng;
+                });
+              }
+            });
           }
-          _latitude = (data['latitude'] as num?)?.toDouble() ?? _latitude;
-          _longitude = (data['longitude'] as num?)?.toDouble() ?? _longitude;
         }
 
         return Scaffold(
@@ -622,7 +662,7 @@ class _TaskDescriptionScreenState extends ConsumerState<TaskDescriptionScreen> {
     // use _currentUserId if available, else a fast async lookup isn't possible in a sync build method easily.
     // wait, we can just omit techId or use a FutureBuilder. We'll use collectionGroup fallback if empty.
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: ref.read(databaseServiceProvider).streamBidsForBooking(reqId, techId: _currentTechId.isNotEmpty ? _currentTechId : null),
+      stream: _bidsStreamInstance ?? const Stream.empty(),
       builder: (context, snapshot) {
         final rawDocs = snapshot.data?.docs ?? [];
         final cleanWId = reqId.replaceAll('ID #', '').trim();
@@ -874,16 +914,43 @@ class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> 
   _BidStage _stage = _BidStage.entering;
   bool _isSubmitting = false;
   String _currentTechId = '';
+  late String _targetRequestId;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _bidsStream;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _reqSnapStream;
 
   @override
   void initState() {
     super.initState();
+    _targetRequestId = _cleanRequestId(widget.requestId).isNotEmpty ? _cleanRequestId(widget.requestId) : 'demo_request_id';
+    _initStreams();
     _loadTechId();
+  }
+
+  void _initStreams() {
+    final techId = _currentTechId.isNotEmpty ? _currentTechId : 'tech_demo';
+    _bidsStream = ref.read(databaseServiceProvider).streamBidsForBooking(_targetRequestId, techId: techId);
+    if (_targetRequestId.isNotEmpty && _targetRequestId != 'demo_request_id') {
+      _reqSnapStream = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database')
+          .collection('techs')
+          .doc(techId)
+          .collection('requests')
+          .doc(_targetRequestId)
+          .snapshots();
+    } else {
+      _reqSnapStream = const Stream.empty();
+    }
   }
 
   Future<void> _loadTechId() async {
     final uid = await ChatService.getEffectiveUserId();
-    if (mounted) setState(() => _currentTechId = uid);
+    final resolvedId = await _getTargetRequestId();
+    if (mounted) {
+      setState(() {
+        _currentTechId = uid;
+        _targetRequestId = resolvedId;
+        _initStreams();
+      });
+    }
   }
 
   String _cleanRequestId(String? raw) {
@@ -1085,13 +1152,7 @@ class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> 
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
                 ),
-                child: FutureBuilder<String>(
-                  future: _getTargetRequestId(),
-                  builder: (context, snapshot) {
-                    final targetRequestId = snapshot.data ?? 'demo_request_id';
-                    return _buildRealtimeBidsTopSection(targetRequestId);
-                  },
-                ),
+                child: _buildRealtimeBidsTopSection(),
               ),
               _buildCustomKeypad(),
               const SizedBox(height: 4),
@@ -1111,7 +1172,8 @@ class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> 
     );
   }
 
-  Widget _buildRealtimeBidsTopSection(String targetRequestId) {
+  Widget _buildRealtimeBidsTopSection() {
+    final targetRequestId = _targetRequestId;
     final currentTechId = _currentTechId.isNotEmpty ? _currentTechId : 'tech_demo';
 
     return Column(
@@ -1157,9 +1219,7 @@ class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> 
         const SizedBox(height: 10),
 
         StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: currentTechId.isNotEmpty && targetRequestId.isNotEmpty
-              ? FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').collection('techs').doc(currentTechId).collection('requests').doc(targetRequestId).snapshots()
-              : const Stream.empty(),
+          stream: _reqSnapStream ?? const Stream.empty(),
           builder: (context, reqSnapshot) {
             final reqData = reqSnapshot.data?.data();
             final reqStatus = reqData?['status'] as String? ?? 'pending';
@@ -1193,7 +1253,7 @@ class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> 
 
         // Stream real-time bids for this booking
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: ref.read(databaseServiceProvider).streamBidsForBooking(targetRequestId, techId: currentTechId),
+          stream: _bidsStream ?? const Stream.empty(),
           builder: (context, snapshot) {
             final rawDocs = snapshot.data?.docs ?? [];
             final cleanWId = targetRequestId.replaceAll('ID #', '').trim();

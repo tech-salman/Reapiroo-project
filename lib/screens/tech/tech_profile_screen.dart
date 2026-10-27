@@ -11,6 +11,11 @@ import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/services/storage_service.dart';
 import 'package:reapiroo/screens/onboarding_screen.dart';
 import 'tech_main_layout.dart';
+import 'tech_wallet_screen.dart';
+import 'widgets/tech_services_section.dart';
+import 'widgets/tech_reviews_section.dart';
+import 'widgets/tech_portfolio_section.dart';
+import 'widgets/tech_wallet_summary_section.dart';
 
 enum ProfileSubView {
   main,
@@ -678,12 +683,6 @@ class _TechProfileScreenState extends ConsumerState<TechProfileScreen> {
     });
   }
 
-  double get _averageRating {
-    if (_allReviews.isEmpty) return 0.0;
-    final total = _allReviews.fold<int>(0, (acc, item) => acc + item.rating);
-    return double.parse((total / _allReviews.length).toStringAsFixed(1));
-  }
-
   List<ReviewData> get _filteredReviews {
     if (_selectedStarFilter == 'All') return _allReviews;
     final targetStars = int.tryParse(_selectedStarFilter.split(' ').first) ?? 5;
@@ -802,6 +801,24 @@ class _TechProfileScreenState extends ConsumerState<TechProfileScreen> {
               fontWeight: FontWeight.w900,
               color: Colors.black,
               letterSpacing: -0.5,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: TechWalletSummarySection(
+              balance: _totalEarnedAmount,
+              todayAppointmentsCount: _todayAppointmentsCount,
+              happyCustomersCount: _happyCustomersCount,
+              jobsCompletedCount: _jobsCompletedCount,
+              onViewWalletPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const TechWalletScreen()),
+                );
+              },
             ),
           ),
 
@@ -1230,7 +1247,7 @@ class _TechProfileScreenState extends ConsumerState<TechProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 4-Tab Segmented Bar
+                // 5-Tab Segmented Bar
                 Container(
                   height: 46,
                   decoration: BoxDecoration(
@@ -1239,7 +1256,7 @@ class _TechProfileScreenState extends ConsumerState<TechProfileScreen> {
                   ),
                   padding: const EdgeInsets.all(4),
                   child: Row(
-                    children: ['Personal', 'Services', 'Details', 'Documents'].map((tab) {
+                    children: ['Personal', 'Services', 'Portfolio', 'Details', 'Documents'].map((tab) {
                       final isSelected = _activeBioTab == tab;
                       return Expanded(
                         child: GestureDetector(
@@ -1360,87 +1377,28 @@ class _TechProfileScreenState extends ConsumerState<TechProfileScreen> {
                     ),
                   ),
                 ] else if (_activeBioTab == 'Services') ...[
-                  const Text(
-                    'Select Active Services',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF6B7280),
-                    ),
+                  TechServicesSection(
+                    allAvailableServices: _allAvailableServices,
+                    selectedServices: _selectedServices,
+                    onServiceToggle: (title) {
+                      setState(() {
+                        if (_selectedServices.contains(title)) {
+                          _selectedServices.remove(title);
+                        } else {
+                          _selectedServices.add(title);
+                        }
+                      });
+                    },
                   ),
-                  const SizedBox(height: 16),
-                  // All Available Services Cards
-                  ..._allAvailableServices.map((service) {
-                    final title = service['title']!;
-                    final imageUrl = service['imageUrl']!;
-                    final isChecked = _selectedServices.contains(title);
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          if (isChecked) {
-                            _selectedServices.remove(title);
-                          } else {
-                            _selectedServices.add(title);
-                          }
-                        });
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 14),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFF3F4F6)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                imageUrl,
-                                width: 72,
-                                height: 56,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Text(
-                                title,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              width: 26,
-                              height: 26,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isChecked ? Colors.black : Colors.grey.shade400,
-                                  width: 2,
-                                ),
-                                color: isChecked ? Colors.black : Colors.transparent,
-                              ),
-                              child: isChecked
-                                  ? const Icon(Icons.check, color: Colors.white, size: 16)
-                                  : null,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
+                ] else if (_activeBioTab == 'Portfolio') ...[
+                  TechPortfolioSection(
+                    portfolioImages: _allReviews.map((r) => r.avatarUrl).where((u) => u.isNotEmpty).toList(),
+                    onAddImagePressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Portfolio upload feature coming soon.')),
+                      );
+                    },
+                  ),
                 ] else if (_activeBioTab == 'Details') ...[
                   const Text(
                     'Total Completed Jobs',
@@ -1594,231 +1552,15 @@ class _TechProfileScreenState extends ConsumerState<TechProfileScreen> {
   // 4. REVIEWS SUBVIEW
   // ==========================================
   Widget _buildReviewsView() {
-    final displayReviews = _filteredReviews;
-    final avgRating = _averageRating;
-
-    return Column(
-      children: [
-        // Top Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: _backToMain,
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.chevron_left, color: Colors.white, size: 28),
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Text(
-                'Reviews',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black,
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Calculated Overall Rating Banner
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    children: [
-                      Row(
-                        children: List.generate(
-                          5,
-                          (index) => Icon(
-                            index < avgRating.floor() ? Icons.star : Icons.star_half,
-                            color: const Color(0xFFFFC107),
-                            size: 26,
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '$avgRating out of 5',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${_allReviews.length} reviews',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Star Filter Dropdown Pill
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedStarFilter,
-                      dropdownColor: Colors.black,
-                      icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedStarFilter = val);
-                        }
-                      },
-                      items: const [
-                        DropdownMenuItem(value: 'All', child: Text('All Stars')),
-                        DropdownMenuItem(value: '5 stars', child: Text('5 stars')),
-                        DropdownMenuItem(value: '4 stars', child: Text('4 stars')),
-                        DropdownMenuItem(value: '3 stars', child: Text('3 stars')),
-                        DropdownMenuItem(value: '2 stars', child: Text('2 stars')),
-                        DropdownMenuItem(value: '1 star', child: Text('1 star')),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Filtered Review Cards List
-                if (displayReviews.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'No reviews found for $_selectedStarFilter',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
-                    ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9F9FB),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFE5E5EA)),
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: displayReviews.length,
-                      separatorBuilder: (context, index) => const Divider(
-                        color: Color(0xFFE5E5EA),
-                        height: 28,
-                        thickness: 1,
-                      ),
-                      itemBuilder: (context, index) {
-                        final item = displayReviews[index];
-                        return _buildReviewCardItem(item);
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReviewCardItem(ReviewData item) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundImage: item.avatarUrl.isNotEmpty && Uri.tryParse(item.avatarUrl)?.hasAbsolutePath == true
-                  ? NetworkImage(item.avatarUrl)
-                  : null,
-              backgroundColor: Colors.grey.shade300,
-              child: (item.avatarUrl.isEmpty || Uri.tryParse(item.avatarUrl)?.hasAbsolutePath != true)
-                  ? const Icon(Icons.person, color: Colors.grey)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              item.name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Row(
-              children: List.generate(
-                5,
-                (i) => Icon(
-                  Icons.star,
-                  color: i < item.rating ? const Color(0xFFFFC107) : Colors.grey.shade300,
-                  size: 18,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              item.date,
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          item.comment,
-          style: const TextStyle(
-            fontSize: 14,
-            height: 1.4,
-            color: Colors.black87,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ],
+    return TechReviewsSection(
+      reviews: _filteredReviews,
+      selectedStarFilter: _selectedStarFilter,
+      onStarFilterChanged: (filter) {
+        setState(() {
+          _selectedStarFilter = filter;
+        });
+      },
+      onBackPressed: _backToMain,
     );
   }
 

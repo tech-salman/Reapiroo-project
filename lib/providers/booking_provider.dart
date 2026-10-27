@@ -107,3 +107,60 @@ class BookingController extends AsyncNotifier<void> {
 final bookingControllerProvider = AsyncNotifierProvider<BookingController, void>(() {
   return BookingController();
 });
+
+/// State for customer bookings UI filter and viewing state
+class CustomerBookingsState {
+  final String selectedFilter;
+  final String? viewingBookingId;
+  final bool isViewingTaskDescription;
+  final bool isViewingTechReviews;
+  final bool isLoadingSpareParts;
+
+  const CustomerBookingsState({
+    this.selectedFilter = 'In Progress',
+    this.viewingBookingId,
+    this.isViewingTaskDescription = false,
+    this.isViewingTechReviews = false,
+    this.isLoadingSpareParts = false,
+  });
+
+  CustomerBookingsState copyWith({
+    String? selectedFilter,
+    String? viewingBookingId,
+    bool? isViewingTaskDescription,
+    bool? isViewingTechReviews,
+    bool? isLoadingSpareParts,
+  }) {
+    return CustomerBookingsState(
+      selectedFilter: selectedFilter ?? this.selectedFilter,
+      viewingBookingId: viewingBookingId ?? this.viewingBookingId,
+      isViewingTaskDescription: isViewingTaskDescription ?? this.isViewingTaskDescription,
+      isViewingTechReviews: isViewingTechReviews ?? this.isViewingTechReviews,
+      isLoadingSpareParts: isLoadingSpareParts ?? this.isLoadingSpareParts,
+    );
+  }
+}
+
+class CustomerBookingsController extends StateNotifier<CustomerBookingsState> {
+  CustomerBookingsController() : super(const CustomerBookingsState());
+
+  void setFilter(String filter) {
+    state = state.copyWith(selectedFilter: filter);
+  }
+
+  void selectBooking(String? bookingId, {bool taskDescription = false, bool techReviews = false}) {
+    state = state.copyWith(
+      viewingBookingId: bookingId,
+      isViewingTaskDescription: taskDescription,
+      isViewingTechReviews: techReviews,
+    );
+  }
+
+  void setLoadingSpareParts(bool loading) {
+    state = state.copyWith(isLoadingSpareParts: loading);
+  }
+}
+
+final customerBookingsStateProvider = StateNotifierProvider<CustomerBookingsController, CustomerBookingsState>((ref) {
+  return CustomerBookingsController();
+});

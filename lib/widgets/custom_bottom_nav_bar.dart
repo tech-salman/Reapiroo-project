@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:reapiroo/services/chat_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:reapiroo/providers/auth_provider.dart';
+import 'package:reapiroo/providers/chat_provider.dart'; // import
 
 class CustomNavItem {
   final Widget? customIcon;
@@ -13,65 +15,21 @@ class CustomNavItem {
   });
 }
 
-class _ChatIconWrapper extends StatefulWidget {
+class _ChatIconWrapper extends ConsumerWidget {
   final Widget child;
   const _ChatIconWrapper({required this.child});
 
   @override
-  State<_ChatIconWrapper> createState() => _ChatIconWrapperState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUserId = ref.watch(currentFirebaseUserProvider)?.uid ?? '';
+    final chatThreadsAsync = ref.watch(userChatThreadsProvider);
+    final hasUnread = chatThreadsAsync.asData?.value.any((t) => t.unreadCount > 0 && t.lastSenderId != currentUserId) ?? false;
 
-class _ChatIconWrapperState extends State<_ChatIconWrapper> {
-  bool _hasUnread = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkUnread();
-  }
-
-  Future<void> _checkUnread() async {
-    final userId = await ChatService.getEffectiveUserId();
-    if (userId.isEmpty || userId == 'demo_user') return;
-
-    // Listen to both customer and tech streams just in case
-    ChatService().getUserChatThreads(userId, isTech: false).listen((threads) {
-      if (!mounted) return;
-      bool unread = false;
-      for (var t in threads) {
-        if (t.unreadCount > 0 && t.lastSenderId != userId) {
-          unread = true;
-          break;
-        }
-      }
-      if (_hasUnread != unread) {
-        setState(() => _hasUnread = unread);
-      }
-    });
-
-    ChatService().getUserChatThreads(userId, isTech: true).listen((threads) {
-      if (!mounted) return;
-      bool unread = false;
-      for (var t in threads) {
-        if (t.unreadCount > 0 && t.lastSenderId != userId) {
-          unread = true;
-          break;
-        }
-      }
-      // If we already detected unread on the other stream, don't override to false unless both are false.
-      if (unread) {
-        if (!_hasUnread) setState(() => _hasUnread = true);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        widget.child,
-        if (_hasUnread)
+        child,
+        if (hasUnread)
           Positioned(
             right: -2,
             top: -2,

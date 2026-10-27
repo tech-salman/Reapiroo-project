@@ -80,7 +80,7 @@ class _NewTaskCardState extends State<NewTaskCard> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: Image(
-                        image: StorageService.getImageProvider(imageUrl),
+                        image: StorageService.getImageProvider(imageUrl, targetWidth: 600),
                         fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 50),
                       ),
@@ -198,7 +198,7 @@ class _NewTaskCardState extends State<NewTaskCard> {
                               child: const Icon(Icons.videocam, color: Colors.white54, size: 30),
                             )
                           : Image(
-                              image: StorageService.getImageProvider(mediaList.first),
+                              image: StorageService.getImageProvider(mediaList.first, targetWidth: 200),
                               width: 86,
                               height: 72,
                               fit: BoxFit.cover,
@@ -366,7 +366,7 @@ class _NewTaskCardState extends State<NewTaskCard> {
         child: SizedBox(
           height: 170,
           child: Image(
-            image: StorageService.getImageProvider(url),
+            image: StorageService.getImageProvider(url, targetWidth: 500),
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) => Container(
               color: Colors.grey.shade900,

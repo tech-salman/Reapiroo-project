@@ -33,26 +33,48 @@ class NewTaskScreen extends ConsumerStatefulWidget {
 class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   int _currentNavIndex = 0;
   String _currentTechId = '';
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _requestStreamInstance;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _bidsStreamInstance;
 
   @override
   void initState() {
     super.initState();
+    _initStreams();
     _loadUserId();
+  }
+
+  void _initStreams() {
+    if (widget.requestId != null && widget.requestId!.isNotEmpty) {
+      final techId = _currentTechId.isNotEmpty ? _currentTechId : 'tech_demo';
+      _requestStreamInstance = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database')
+          .collection('techs')
+          .doc(techId)
+          .collection('requests')
+          .doc(widget.requestId)
+          .snapshots();
+
+      _bidsStreamInstance = ref.read(databaseServiceProvider).streamBidsForBooking(
+        widget.requestId!,
+        techId: _currentTechId.isNotEmpty ? _currentTechId : null,
+      );
+    } else {
+      _requestStreamInstance = const Stream.empty();
+      _bidsStreamInstance = const Stream.empty();
+    }
   }
 
   Future<void> _loadUserId() async {
     final uid = await ChatService.getEffectiveUserId();
-    if (mounted) setState(() => _currentTechId = uid);
+    if (mounted) {
+      setState(() {
+        _currentTechId = uid;
+        _initStreams();
+      });
+    }
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> _requestStream() {
-    if (widget.requestId == null || widget.requestId!.isEmpty) {
-      return const Stream.empty();
-    }
-    if (_currentTechId.isNotEmpty) {
-      return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').collection('techs').doc(_currentTechId).collection('requests').doc(widget.requestId).snapshots();
-    }
-    return FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').collection('techs').doc('tech_demo').collection('requests').doc(widget.requestId).snapshots();
+    return _requestStreamInstance ?? const Stream.empty();
   }
 
   static const List<CustomNavItem> _navItems = [
@@ -67,6 +89,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: _requestStream(),
       builder: (context, requestSnap) {
+        debugPrint('NewTaskScreen StreamBuilder state: ${requestSnap.connectionState}');
         final reqData = requestSnap.data?.data() ?? {};
         final status = (reqData['status'] as String? ?? 'open').toLowerCase();
         
@@ -85,9 +108,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         final time = reqData['time'] as String? ?? '12:00';
 
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: widget.requestId != null && widget.requestId!.isNotEmpty
-              ? ref.read(databaseServiceProvider).streamBidsForBooking(widget.requestId!, techId: _currentTechId.isNotEmpty ? _currentTechId : null)
-              : const Stream.empty(),
+          stream: _bidsStreamInstance ?? const Stream.empty(),
           builder: (context, bidsSnapshot) {
             bool hasAcceptedBid = false;
             final bidDocs = bidsSnapshot.data?.docs ?? [];
@@ -1000,16 +1021,32 @@ class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> 
   _BidStage _stage = _BidStage.entering;
   bool _isSubmitting = false;
   String _currentTechId = '';
+  late String _targetRequestId;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _bidsStream;
 
   @override
   void initState() {
     super.initState();
+    _targetRequestId = _cleanRequestId(widget.requestId).isNotEmpty ? _cleanRequestId(widget.requestId) : 'demo_request_id';
+    _initStreams();
     _loadTechId();
+  }
+
+  void _initStreams() {
+    final techId = _currentTechId.isNotEmpty ? _currentTechId : 'tech_demo';
+    _bidsStream = ref.read(databaseServiceProvider).streamBidsForBooking(_targetRequestId, techId: techId);
   }
 
   Future<void> _loadTechId() async {
     final uid = await ChatService.getEffectiveUserId();
-    if (mounted) setState(() => _currentTechId = uid);
+    final resolvedId = await _getTargetRequestId();
+    if (mounted) {
+      setState(() {
+        _currentTechId = uid;
+        _targetRequestId = resolvedId;
+        _initStreams();
+      });
+    }
   }
 
   String _cleanRequestId(String? raw) {
@@ -1211,13 +1248,7 @@ class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> 
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
                 ),
-                child: FutureBuilder<String>(
-                  future: _getTargetRequestId(),
-                  builder: (context, snapshot) {
-                    final targetRequestId = snapshot.data ?? 'demo_request_id';
-                    return _buildRealtimeBidsTopSection(targetRequestId);
-                  },
-                ),
+                child: _buildRealtimeBidsTopSection(),
               ),
               _buildCustomKeypad(),
               const SizedBox(height: 4),
@@ -1237,7 +1268,8 @@ class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> 
     );
   }
 
-  Widget _buildRealtimeBidsTopSection(String targetRequestId) {
+  Widget _buildRealtimeBidsTopSection() {
+    final targetRequestId = _targetRequestId;
     final currentTechId = _currentTechId.isNotEmpty ? _currentTechId : 'tech_demo';
 
     return Column(
@@ -1283,7 +1315,7 @@ class _BidNegotiationContentState extends ConsumerState<_BidNegotiationContent> 
         const SizedBox(height: 10),
 
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: ref.read(databaseServiceProvider).streamBidsForBooking(targetRequestId, techId: currentTechId),
+          stream: _bidsStream ?? const Stream.empty(),
           builder: (context, snapshot) {
             final rawDocs = snapshot.data?.docs ?? [];
             final cleanWId = targetRequestId.replaceAll('ID #', '').trim();

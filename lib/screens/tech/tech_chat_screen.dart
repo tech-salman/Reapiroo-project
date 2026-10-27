@@ -23,6 +23,16 @@ class TechChatScreen extends ConsumerStatefulWidget {
 
 class _TechChatScreenState extends ConsumerState<TechChatScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final Map<String, Future<String>> _avatarFutureCache = {};
+
+  Future<String> _getAvatarFuture(WidgetRef ref, String id, String initialUrl) {
+    if (initialUrl.isNotEmpty) return Future.value(initialUrl);
+    if (id.isEmpty) return Future.value('');
+    return _avatarFutureCache.putIfAbsent(
+      id,
+      () => ref.read(databaseServiceProvider).getUniversalUserAvatar(id),
+    );
+  }
 
   @override
   void dispose() {
@@ -150,7 +160,7 @@ class _TechChatScreenState extends ConsumerState<TechChatScreen> {
               final searchQuery = _searchController.text.trim().toLowerCase();
               final filteredThreads = threads.where((thread) {
                 if (searchQuery.isEmpty) return true;
-                final peerName = thread.peerName.toLowerCase();
+                final peerName = thread.customerName.toLowerCase();
                 final lastMsg = thread.lastMessage.toLowerCase();
                 return peerName.contains(searchQuery) || lastMsg.contains(searchQuery);
               }).toList();
@@ -183,13 +193,13 @@ class _TechChatScreenState extends ConsumerState<TechChatScreen> {
                   final thread = filteredThreads[index];
                   final chatId = thread.chatId;
                   final customerId = thread.customerId;
-                  final peerName = thread.peerName.isNotEmpty ? thread.peerName : 'Customer';
+                  final peerName = thread.customerName.isNotEmpty ? thread.customerName : 'Customer';
                   final lastMessage = thread.lastMessage.isNotEmpty ? thread.lastMessage : 'Say hello...';
-                  final initialAvatarUrl = thread.peerAvatar;
+                  final initialAvatarUrl = thread.customerAvatar;
                   final bookingId = thread.bookingId;
 
                   return FutureBuilder<String>(
-                    future: initialAvatarUrl.isNotEmpty ? Future.value(initialAvatarUrl) : ref.read(databaseServiceProvider).getUniversalUserAvatar(customerId),
+                    future: _getAvatarFuture(ref, customerId, initialAvatarUrl),
                     builder: (context, avatarSnap) {
                       final avatarUrl = avatarSnap.data ?? initialAvatarUrl;
 
