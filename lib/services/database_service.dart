@@ -5,6 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database');
 
+  FirebaseFirestore get db => _db;
+
   // =========================================================================
   // NATIVE FIRESTORE AUTO ID GENERATOR (Strictly auto-assigned by Firestore)
   // =========================================================================
@@ -431,13 +433,25 @@ class DatabaseService {
     return custSnap;
   }
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>> streamUserProfile(String uid) {
-    return _customerAccountDoc(uid).snapshots().asyncExpand((custSnap) {
-      if (custSnap.exists) {
-        return _customerAccountDoc(uid).snapshots();
-      }
-      return _techAccountDoc(uid).snapshots();
-    });
+  Stream<DocumentSnapshot<Map<String, dynamic>>> streamUserProfile(String uid) async* {
+    if (uid.isEmpty) return;
+
+    // Check once whether customer document exists
+    final custSnap = await _customerAccountDoc(uid).get();
+    if (custSnap.exists) {
+      yield* _customerAccountDoc(uid).snapshots();
+      return;
+    }
+
+    // Check once whether tech document exists
+    final techSnap = await _techAccountDoc(uid).get();
+    if (techSnap.exists) {
+      yield* _techAccountDoc(uid).snapshots();
+      return;
+    }
+
+    // Default fallback to customer snapshots
+    yield* _customerAccountDoc(uid).snapshots();
   }
 
   Future<bool> userProfileExists(String uid) async {
@@ -1377,14 +1391,14 @@ class DatabaseService {
 
     if (key.isNotEmpty) {
       try {
-        final queryByPhone = await _db.collection('customers').where('phoneNumber', isEqualTo: key).limit(1).get();
-        if (queryByPhone.docs.isNotEmpty) return queryByPhone.docs.first;
-
-        final queryByUid = await _db.collection('customers').where('uid', isEqualTo: key).limit(1).get();
-        if (queryByUid.docs.isNotEmpty) return queryByUid.docs.first;
-
-        final queryByEmail = await _db.collection('customers').where('email', isEqualTo: key.trim().toLowerCase()).limit(1).get();
-        if (queryByEmail.docs.isNotEmpty) return queryByEmail.docs.first;
+        final queryResults = await Future.wait([
+          _db.collection('customers').where('phoneNumber', isEqualTo: key).limit(1).get(),
+          _db.collection('customers').where('uid', isEqualTo: key).limit(1).get(),
+          _db.collection('customers').where('email', isEqualTo: key.trim().toLowerCase()).limit(1).get(),
+        ]);
+        for (var snap in queryResults) {
+          if (snap.docs.isNotEmpty) return snap.docs.first;
+        }
       } catch (_) {}
     }
 
@@ -1449,14 +1463,14 @@ class DatabaseService {
 
     if (key.isNotEmpty) {
       try {
-        final queryByPhone = await _db.collection('techs').where('phoneNumber', isEqualTo: key).limit(1).get();
-        if (queryByPhone.docs.isNotEmpty) return queryByPhone.docs.first;
-
-        final queryByUid = await _db.collection('techs').where('uid', isEqualTo: key).limit(1).get();
-        if (queryByUid.docs.isNotEmpty) return queryByUid.docs.first;
-
-        final queryByEmail = await _db.collection('techs').where('email', isEqualTo: key.trim().toLowerCase()).limit(1).get();
-        if (queryByEmail.docs.isNotEmpty) return queryByEmail.docs.first;
+        final queryResults = await Future.wait([
+          _db.collection('techs').where('phoneNumber', isEqualTo: key).limit(1).get(),
+          _db.collection('techs').where('uid', isEqualTo: key).limit(1).get(),
+          _db.collection('techs').where('email', isEqualTo: key.trim().toLowerCase()).limit(1).get(),
+        ]);
+        for (var snap in queryResults) {
+          if (snap.docs.isNotEmpty) return snap.docs.first;
+        }
       } catch (_) {}
     }
 

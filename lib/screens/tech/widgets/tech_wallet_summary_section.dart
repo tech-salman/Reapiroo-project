@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../providers/auth_provider.dart';
 
-class TechWalletSummarySection extends StatelessWidget {
-  final double balance;
+class TechWalletSummarySection extends ConsumerWidget {
+  final double? balance;
   final int todayAppointmentsCount;
   final int happyCustomersCount;
   final int jobsCompletedCount;
@@ -9,7 +11,7 @@ class TechWalletSummarySection extends StatelessWidget {
 
   const TechWalletSummarySection({
     super.key,
-    required this.balance,
+    this.balance,
     required this.todayAppointmentsCount,
     required this.happyCustomersCount,
     required this.jobsCompletedCount,
@@ -17,7 +19,9 @@ class TechWalletSummarySection extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(userProfileStreamProvider).asData?.value;
+    final liveBalance = profile?.walletBalance ?? balance ?? 0.0;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -44,17 +48,21 @@ class TechWalletSummarySection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            '\$${balance.toStringAsFixed(2)}',
-            style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${liveBalance.toStringAsFixed(2)} AED',
+              style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
+            ),
           ),
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildStatItem('Appointments', '$todayAppointmentsCount'),
-              _buildStatItem('Happy Clients', '$happyCustomersCount'),
-              _buildStatItem('Jobs Done', '$jobsCompletedCount'),
+              Expanded(child: _buildStatItem('Appointments', '$todayAppointmentsCount')),
+              Expanded(child: _buildStatItem('Happy Clients', '$happyCustomersCount')),
+              Expanded(child: _buildStatItem('Jobs Done', '$jobsCompletedCount')),
             ],
           ),
         ],
@@ -69,11 +77,14 @@ class TechWalletSummarySection extends StatelessWidget {
         Text(
           value,
           style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: Colors.white60, fontSize: 12),
+          style: const TextStyle(color: Colors.white60, fontSize: 11),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
         ),
       ],
     );

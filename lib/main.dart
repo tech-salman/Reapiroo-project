@@ -31,12 +31,22 @@ final ThemeData _kDarkAppTheme = ThemeData(
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Allow font pre-fetching asynchronously without blocking UI initialization
+  GoogleFonts.config.allowRuntimeFetching = true;
+
+  // Run Firebase SDK initialization and local SharedPreferences disk read concurrently in parallel
+  final results = await Future.wait([
+    Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ),
+    SharedPreferences.getInstance(),
+  ]);
+
+  final firebaseApp = results[0] as FirebaseApp;
+  final prefs = results[1] as SharedPreferences;
 
   try {
-    FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').settings = const Settings(
+    FirebaseFirestore.instanceFor(app: firebaseApp, databaseId: 'database').settings = const Settings(
       persistenceEnabled: true,
       cacheSizeBytes: 104857600, // 100 MB capped limit
     );
@@ -44,7 +54,6 @@ void main() async {
     debugPrint('Firestore settings initialization error: $e');
   }
 
-  final prefs = await SharedPreferences.getInstance();
   final bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
   final String userRole = prefs.getString('userRole') ?? '';
 

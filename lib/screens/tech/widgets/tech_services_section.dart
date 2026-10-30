@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class TechServicesSection extends StatelessWidget {
   final List<Map<String, String>> allAvailableServices;
@@ -51,11 +52,14 @@ class TechServicesSection extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      imageUrl,
+                    child: CachedNetworkImage(
+                      imageUrl: imageUrl,
                       width: 72,
                       height: 56,
                       fit: BoxFit.cover,
+                      memCacheWidth: 200,
+                      placeholder: (context, url) => Container(color: Colors.black12),
+                      errorWidget: (context, url, error) => const Icon(Icons.broken_image_outlined, color: Colors.grey),
                     ),
                   ),
                   const SizedBox(width: 14),

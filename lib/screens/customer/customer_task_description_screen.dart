@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/services/permission_service.dart';
 import 'package:reapiroo/widgets/custom_bottom_nav_bar.dart';
@@ -878,91 +879,61 @@ class _CustomerTaskDescriptionScreenState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Top Bar
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap:
-                widget.onBackPressed ?? () => Navigator.maybePop(context),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.chevron_left,
-                      color: Colors.white, size: 28),
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Text(
-                  'Task Description',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                    letterSpacing: -0.5,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-
+        const _CustomerTaskHeaderBar(),
         Expanded(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(
-                left: 16.0, right: 16.0, top: 12.0, bottom: MediaQuery.of(context).viewInsets.bottom + 140.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.serviceName,
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.black,
-                    letterSpacing: -0.5,
+          child: RepaintBoundary(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 16.0,
+                right: 16.0,
+                top: 12.0,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 140.0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.serviceName,
+                    style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black,
+                      letterSpacing: -0.5,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
 
-                const SizedBox(height: 16),
-
-                // 1. Upload Picture Card
-                _buildFormCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _uploadedMediaPaths.isEmpty
-                                  ? 'Upload Picture'
-                                  : '${_uploadedMediaPaths.length} file(s) selected',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black,
+                  // 1. Upload Picture Card
+                  _buildFormCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _uploadedMediaPaths.isEmpty
+                                    ? 'Upload Picture'
+                                    : '${_uploadedMediaPaths.length} file(s) selected',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: _handleUploadMedia,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Row(
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: _handleUploadMedia,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.black,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(Icons.file_upload_outlined,
@@ -1445,7 +1416,7 @@ class _CustomerTaskDescriptionScreenState
                     ),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
+                        : Text(
                       'Next',
                       style: TextStyle(
                         color: Colors.white,
@@ -1456,12 +1427,13 @@ class _CustomerTaskDescriptionScreenState
                   ),
                 ),
               ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+            ), // Column
+          ), // SingleChildScrollView
+        ), // RepaintBoundary
+      ), // Expanded
+    ], // outer Column children
+  ); // outer Column
+}
 
   Widget _buildFormCard({required Widget child}) {
     return Container(
@@ -1881,17 +1853,20 @@ class _DraggableMapPopupState extends State<_DraggableMapPopup> {
                                 top: top,
                                 width: 256,
                                 height: 256,
-                                child: Image.network(
-                                  tileUrl,
+                                child: CachedNetworkImage(
+                                  imageUrl: tileUrl,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Container(
-                                        color: const Color(0xFFE5E3DF),
-                                        child: const Center(
-                                          child: Icon(Icons.map_outlined,
-                                              color: Colors.grey),
-                                        ),
-                                      ),
+                                  memCacheWidth: 256,
+                                  memCacheHeight: 256,
+                                  placeholder: (context, url) => Container(
+                                    color: const Color(0xFFE5E3DF),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    color: const Color(0xFFE5E3DF),
+                                    child: const Center(
+                                      child: Icon(Icons.map_outlined, color: Colors.grey),
+                                    ),
+                                  ),
                                 ),
                               ),
                             );
@@ -2078,6 +2053,47 @@ class _DraggableMapPopupState extends State<_DraggableMapPopup> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomerTaskHeaderBar extends StatelessWidget {
+  const _CustomerTaskHeaderBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.maybePop(context),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: Colors.black,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.chevron_left,
+                  color: Colors.white, size: 28),
+            ),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Text(
+              'Task Description',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+                letterSpacing: -0.5,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

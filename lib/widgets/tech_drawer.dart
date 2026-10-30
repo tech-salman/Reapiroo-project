@@ -69,136 +69,148 @@ class TechDrawer extends ConsumerWidget {
 
     return Drawer(
       width: 290.0,
+      elevation: 16.0,
       backgroundColor: Colors.white,
       child: SafeArea(
-        child: Column(
-          children: [
-            // User Header
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              color: Colors.black,
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundImage: StorageService.getImageProvider(userAvatar),
-                    backgroundColor: Colors.grey,
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          userName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      // User Header
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                        color: Colors.black,
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 28,
+                              backgroundImage: StorageService.getImageProvider(userAvatar),
+                              backgroundColor: Colors.grey,
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    userName,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    userEmail,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: Colors.white, size: 22),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          userEmail,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Navigation Links for Tech
+                      _buildDrawerTile(
+                        icon: Icons.home_outlined,
+                        title: 'Home',
+                        onTap: () {
+                          Navigator.pop(context);
+                          onSelectTab?.call(0);
+                        },
+                      ),
+                      _buildDrawerTile(
+                        icon: Icons.calendar_month_outlined,
+                        title: 'Requests',
+                        onTap: () {
+                          Navigator.pop(context);
+                          onSelectTab?.call(1);
+                        },
+                      ),
+                      _buildDrawerTile(
+                        icon: Icons.chat_bubble_outline,
+                        title: 'Chats',
+                        onTap: () {
+                          Navigator.pop(context);
+                          onSelectTab?.call(2);
+                        },
+                      ),
+                      _buildDrawerTile(
+                        icon: Icons.person_outline,
+                        title: 'Profile',
+                        onTap: () {
+                          Navigator.pop(context);
+                          onSelectTab?.call(3);
+                        },
+                      ),
+                      _buildDrawerTile(
+                        icon: Icons.account_balance_wallet_outlined,
+                        title: 'Wallet',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const TechWalletScreen()),
+                          );
+                        },
+                      ),
+                      _buildDrawerTile(
+                        icon: Icons.notifications_none_outlined,
+                        title: 'Notifications',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const TechNotificationScreen()),
+                          );
+                        },
+                      ),
+
+                      const Spacer(),
+
+                      const Divider(color: Color(0xFFE5E5EA), height: 1),
+
+                      // Logout Button
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        child: ListTile(
+                          onTap: () => _handleLogout(context, ref),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          tileColor: const Color(0xFFFFF0F0),
+                          leading: const Icon(Icons.logout, color: Color(0xFFD32F2F), size: 22),
+                          title: const Text(
+                            'Logout',
+                            style: TextStyle(
+                              color: Color(0xFFD32F2F),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 22),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Navigation Links for Tech
-            _buildDrawerTile(
-              icon: Icons.home_outlined,
-              title: 'Home',
-              onTap: () {
-                Navigator.pop(context);
-                onSelectTab?.call(0);
-              },
-            ),
-            _buildDrawerTile(
-              icon: Icons.calendar_month_outlined,
-              title: 'Requests',
-              onTap: () {
-                Navigator.pop(context);
-                onSelectTab?.call(1);
-              },
-            ),
-            _buildDrawerTile(
-              icon: Icons.chat_bubble_outline,
-              title: 'Chats',
-              onTap: () {
-                Navigator.pop(context);
-                onSelectTab?.call(2);
-              },
-            ),
-            _buildDrawerTile(
-              icon: Icons.person_outline,
-              title: 'Profile',
-              onTap: () {
-                Navigator.pop(context);
-                onSelectTab?.call(3);
-              },
-            ),
-            _buildDrawerTile(
-              icon: Icons.account_balance_wallet_outlined,
-              title: 'Wallet',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const TechWalletScreen()),
-                );
-              },
-            ),
-            _buildDrawerTile(
-              icon: Icons.notifications_none_outlined,
-              title: 'Notifications',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const TechNotificationScreen()),
-                );
-              },
-            ),
-
-            const Spacer(),
-
-            const Divider(color: Color(0xFFE5E5EA), height: 1),
-
-            // Logout Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: ListTile(
-                onTap: () => _handleLogout(context, ref),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                tileColor: const Color(0xFFFFF0F0),
-                leading: const Icon(Icons.logout, color: Color(0xFFD32F2F), size: 22),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(
-                    color: Color(0xFFD32F2F),
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );

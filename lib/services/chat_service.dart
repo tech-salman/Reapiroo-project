@@ -152,25 +152,48 @@ class ChatService {
 
     StreamSubscription? sub1;
     StreamSubscription? sub2;
+    Timer? throttleTimer;
+    bool hasPendingEmission = false;
+
+    void emit() {
+      if (!controller.isClosed) {
+        controller.add(combiner(latest1, latest2));
+      }
+      hasPendingEmission = false;
+    }
+
+    void scheduleEmit() {
+      if (throttleTimer?.isActive ?? false) {
+        hasPendingEmission = true;
+        return;
+      }
+      emit();
+      throttleTimer = Timer(const Duration(milliseconds: 100), () {
+        if (hasPendingEmission) {
+          emit();
+        }
+      });
+    }
 
     controller = StreamController<T>(
       onListen: () {
         sub1 = stream1.listen(
           (data) {
             latest1 = data;
-            controller.add(combiner(latest1, latest2));
+            scheduleEmit();
           },
           onError: controller.addError,
         );
         sub2 = stream2.listen(
           (data) {
             latest2 = data;
-            controller.add(combiner(latest1, latest2));
+            scheduleEmit();
           },
           onError: controller.addError,
         );
       },
       onCancel: () {
+        throttleTimer?.cancel();
         sub1?.cancel();
         sub2?.cancel();
       },
@@ -326,8 +349,12 @@ class ChatService {
           .where('isRead', isEqualTo: false)
           .get();
 
-      for (var doc in unreadQuery.docs) {
-        await doc.reference.update({'isRead': true});
+      if (unreadQuery.docs.isNotEmpty) {
+        final batch = _dbService.db.batch();
+        for (var doc in unreadQuery.docs) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+        await batch.commit();
       }
 
       // Reset unread count on the thread itself

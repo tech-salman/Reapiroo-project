@@ -26,6 +26,7 @@ class _RealtimeAlertListenerState extends State<RealtimeAlertListener> {
   bool _isInitialNotificationLoad = true;
   bool _isInitialMessageLoad = true;
   String _currentUserId = '';
+  DateTime _lastBannerTime = DateTime(2000);
 
   @override
   void initState() {
@@ -70,11 +71,12 @@ class _RealtimeAlertListenerState extends State<RealtimeAlertListener> {
     final db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database');
     final rootCollection = widget.isTech ? 'techs' : 'customers';
 
-    // 1. Listen to Realtime Notifications for current user
+    // 1. Listen to Realtime Notifications for current user (Top 15 most recent)
     _notifSub = db
         .collection(rootCollection)
         .doc(_currentUserId)
         .collection('notifications')
+        .limit(15)
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
@@ -105,21 +107,20 @@ class _RealtimeAlertListenerState extends State<RealtimeAlertListener> {
       }
     });
 
-    // 2. Listen to Realtime Chat Updates for current user
+    // 2. Listen to Realtime Chat Updates for current user (Top 15 most recent)
     _chatSub = db
         .collection(rootCollection)
         .doc(_currentUserId)
         .collection('chats')
+        .limit(15)
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
       if (_isInitialMessageLoad) {
         for (final doc in snap.docs) {
           final data = doc.data();
-          if (data != null) {
-            final lastMsgTime = data['lastMessageTimestamp']?.toString() ?? data['updatedAt']?.toString() ?? '';
-            _seenMessageIds.add('${doc.id}_$lastMsgTime');
-          }
+          final lastMsgTime = data['lastMessageTimestamp']?.toString() ?? data['updatedAt']?.toString() ?? '';
+          _seenMessageIds.add('${doc.id}_$lastMsgTime');
         }
         _isInitialMessageLoad = false;
         return;
@@ -156,6 +157,12 @@ class _RealtimeAlertListenerState extends State<RealtimeAlertListener> {
 
   void _showAlertBanner(String title, String message, IconData icon, Color color) {
     if (!mounted) return;
+    final now = DateTime.now();
+    if (now.difference(_lastBannerTime) < const Duration(milliseconds: 800)) {
+      return;
+    }
+    _lastBannerTime = now;
+
     try {
       final overlay = Overlay.of(context);
       final overlayEntry = OverlayEntry(

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class StorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -91,7 +92,7 @@ class StorageService {
     }
 
     final base64Result = await compressAndEncodeBase64Bytes(compressedBytes);
-    return base64Result ?? 'data:image/jpeg;base64,${base64Encode(compressedBytes)}';
+    return base64Result;
   }
 
   /// Uploads Profile Picture from File (Mobile/Desktop) after automatically compressing it to ~10KB.
@@ -140,11 +141,11 @@ class StorageService {
     return await compressAndEncodeBase64(file);
   }
 
-  /// Helper to convert a stored Base64 string, local File path, or HTTP/HTTPS/Blob URL into a Flutter ImageProvider.
+  /// Helper to convert a stored Base64 string, local File path, or HTTP/HTTPS/Blob URL into a Flutter ImageProvider with persistent disk caching.
   static ImageProvider getImageProvider(String? urlOrPath, {String? defaultUrl, int? targetWidth, int? targetHeight}) {
     final fallback = defaultUrl ?? '';
     if (urlOrPath == null || urlOrPath.trim().isEmpty) {
-      final img = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
+      final img = CachedNetworkImageProvider(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
       return (targetWidth != null || targetHeight != null)
           ? ResizeImage(img, width: targetWidth, height: targetHeight)
           : img;
@@ -164,12 +165,12 @@ class StorageService {
         final bytes = base64Decode(base64Clean);
         imageProvider = MemoryImage(bytes);
       } catch (_) {
-        imageProvider = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
+        imageProvider = CachedNetworkImageProvider(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
       }
     }
     // 2. Network URL or Web Blob URL
     else if (clean.startsWith('http://') || clean.startsWith('https://') || clean.startsWith('blob:')) {
-      imageProvider = NetworkImage(clean);
+      imageProvider = CachedNetworkImageProvider(clean);
     }
     // 3. Local File Path (if present on mobile/desktop device)
     else if (!kIsWeb) {
@@ -178,19 +179,19 @@ class StorageService {
         if (file.existsSync()) {
           imageProvider = FileImage(file);
         } else {
-          imageProvider = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
+          imageProvider = CachedNetworkImageProvider(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
         }
       } catch (_) {
-        imageProvider = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
+        imageProvider = CachedNetworkImageProvider(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
       }
     } else {
-      imageProvider = NetworkImage(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
+      imageProvider = CachedNetworkImageProvider(fallback.isNotEmpty ? fallback : 'https://via.placeholder.com/150');
     }
 
     if (targetWidth != null || targetHeight != null) {
       return ResizeImage(imageProvider, width: targetWidth, height: targetHeight);
     }
-    if (imageProvider is NetworkImage) {
+    if (imageProvider is CachedNetworkImageProvider) {
       return ResizeImage(imageProvider, width: targetWidth ?? 500, height: targetHeight);
     }
 

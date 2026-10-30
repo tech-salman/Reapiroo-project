@@ -155,9 +155,12 @@ class AppInfoCardsScrollView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cards = customCards ?? defaultCards;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final cardWidth = screenWidth > 600 ? 260.0 : 190.0;
+    final containerHeight = screenWidth > 600 ? 125.0 : 110.0;
 
     return SizedBox(
-      height: 110,
+      height: containerHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -168,7 +171,7 @@ class AppInfoCardsScrollView extends StatelessWidget {
           return GestureDetector(
             onTap: () => _showCardDetailsDialog(context, card),
             child: Container(
-              width: 195,
+              width: cardWidth,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.black,

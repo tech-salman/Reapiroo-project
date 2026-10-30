@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/booking_model.dart';
 import '../models/bid_model.dart';
 import 'database_service.dart';
@@ -25,50 +26,66 @@ class BookingService {
     );
   }
 
-  /// Streams open requests for technicians via their specific REQUESTS collection
-  Stream<List<BookingModel>> fetchOpenBookings(String techId, {int limit = 50}) {
-    return _dbService.techRequestsCollection(techId)
+  /// Streams open requests for technicians with server-side limit and pagination support
+  Stream<List<BookingModel>> fetchOpenBookings(
+    String techId, {
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) {
+    Query<Map<String, dynamic>> query = _dbService.techRequestsCollection(techId)
         .where('status', isEqualTo: 'open')
-        .limit(limit)
-        .snapshots()
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    return query.snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => BookingModel.fromMap(doc.data(), docId: doc.id))
             .toList());
   }
 
-  /// Streams active/past bookings for a customer via their BOOKINGS collection
-  Stream<List<BookingModel>> fetchCustomerBookings(String customerId) {
-    return _dbService.customerBookingsCollection(customerId)
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs
-          .map((doc) => BookingModel.fromMap(doc.data(), docId: doc.id))
-          .toList();
-      list.sort((a, b) {
-        if (a.createdAt == null) return 1;
-        if (b.createdAt == null) return -1;
-        return b.createdAt!.compareTo(a.createdAt!);
-      });
-      return list;
-    });
+  /// Streams active/past bookings for a customer with server-side limit and pagination support
+  Stream<List<BookingModel>> fetchCustomerBookings(
+    String customerId, {
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) {
+    Query<Map<String, dynamic>> query = _dbService.customerBookingsCollection(customerId)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    return query.snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => BookingModel.fromMap(doc.data(), docId: doc.id))
+            .toList());
   }
 
-  /// Streams bookings assigned to a technician via their REQUESTS collection
-  Stream<List<BookingModel>> fetchTechnicianBookings(String technicianId) {
-    return _dbService.techRequestsCollection(technicianId)
+  /// Streams bookings assigned to a technician with server-side limit and pagination support
+  Stream<List<BookingModel>> fetchTechnicianBookings(
+    String technicianId, {
+    int limit = 20,
+    DocumentSnapshot? startAfter,
+  }) {
+    Query<Map<String, dynamic>> query = _dbService.techRequestsCollection(technicianId)
         .where('bookedTechId', isEqualTo: technicianId)
-        .snapshots()
-        .map((snapshot) {
-      final list = snapshot.docs
-          .map((doc) => BookingModel.fromMap(doc.data(), docId: doc.id))
-          .toList();
-      list.sort((a, b) {
-        if (a.createdAt == null) return 1;
-        if (b.createdAt == null) return -1;
-        return b.createdAt!.compareTo(a.createdAt!);
-      });
-      return list;
-    });
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    return query.snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => BookingModel.fromMap(doc.data(), docId: doc.id))
+            .toList());
   }
 
   /// Places a bid

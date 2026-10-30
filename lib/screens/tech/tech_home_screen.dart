@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:reapiroo/providers/services_providers.dart';
 import 'package:reapiroo/widgets/notification_bell_button.dart';
 import 'package:reapiroo/widgets/app_info_cards_scroll_view.dart';
@@ -86,10 +87,12 @@ class TechBannerWidget extends StatelessWidget {
               top: 0,
               bottom: 0,
               width: 190,
-              child: Image.network(
-                'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&auto=format&fit=crop&q=60',
+              child: CachedNetworkImage(
+                imageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&auto=format&fit=crop&q=60',
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const ColoredBox(color: Colors.black12),
+                memCacheWidth: 400,
+                placeholder: (_, __) => const ColoredBox(color: Colors.black12),
+                errorWidget: (_, __, ___) => const ColoredBox(color: Colors.black12),
               ),
             ),
             Container(
@@ -257,87 +260,76 @@ class TechFilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Container(
-          constraints: const BoxConstraints(maxWidth: 190),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: selectedService,
-              isDense: true,
-              dropdownColor: const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(16),
-              icon: const Padding(
-                padding: EdgeInsets.only(left: 4),
-                child: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
-              ),
-              selectedItemBuilder: (BuildContext context) {
-                return services.map<Widget>((String item) {
-                  return ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 120),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: selectedService,
+                isExpanded: true,
+                isDense: true,
+                dropdownColor: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(16),
+                icon: const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+                ),
+                items: services.map((String service) {
+                  return DropdownMenuItem<String>(
+                    value: service,
                     child: Text(
-                      item,
+                      service,
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         fontSize: 12,
                       ),
                     ),
                   );
-                }).toList();
-              },
-              items: services.map((String service) {
-                return DropdownMenuItem<String>(
-                  value: service,
-                  child: Text(
-                    service,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                );
-              }).toList(),
-              onChanged: onServiceChanged,
+                }).toList(),
+                onChanged: onServiceChanged,
+              ),
             ),
           ),
         ),
         const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: selectedSort,
-              isDense: true,
-              dropdownColor: const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(16),
-              icon: const Padding(
-                padding: EdgeInsets.only(left: 4),
-                child: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: selectedSort,
+                isExpanded: true,
+                isDense: true,
+                dropdownColor: const Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.circular(16),
+                icon: const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+                ),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Nearest', child: Text('Nearest', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: 'Highest Rated', child: Text('Highest Rated', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: 'Lowest Price', child: Text('Lowest Price', overflow: TextOverflow.ellipsis)),
+                ],
+                onChanged: onSortChanged,
               ),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-              items: const [
-                DropdownMenuItem(value: 'Nearest', child: Text('Nearest')),
-                DropdownMenuItem(value: 'Highest Rated', child: Text('Highest Rated')),
-                DropdownMenuItem(value: 'Lowest Price', child: Text('Lowest Price')),
-              ],
-              onChanged: onSortChanged,
             ),
           ),
         ),

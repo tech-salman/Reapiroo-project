@@ -418,12 +418,20 @@ class _TechProfileScreenState extends ConsumerState<TechProfileScreen> {
         }
       }
 
+      double profileWalletBalance = 0.0;
+      try {
+        final profileSnap = await FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'database').collection('techs').doc(targetUid).get();
+        if (profileSnap.exists && profileSnap.data() != null) {
+          profileWalletBalance = (profileSnap.data()!['walletBalance'] as num?)?.toDouble() ?? 0.0;
+        }
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _jobsCompletedCount = jobsDone;
           _todayAppointmentsCount = todayCount > 0 ? todayCount : (jobsDone > 0 ? 1 : 0);
           _happyCustomersCount = uniqueCustomers.isEmpty ? jobsDone : uniqueCustomers.length;
-          _totalEarnedAmount = totalEarned;
+          _totalEarnedAmount = profileWalletBalance > 0 ? profileWalletBalance : totalEarned;
           _isLoadingReports = false;
         });
       }

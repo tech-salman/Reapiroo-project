@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class TechPortfolioSection extends StatelessWidget {
   final List<String> portfolioImages;
@@ -67,9 +68,12 @@ class TechPortfolioSection extends StatelessWidget {
             itemBuilder: (context, index) {
               return ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  portfolioImages[index],
+                child: CachedNetworkImage(
+                  imageUrl: portfolioImages[index],
                   fit: BoxFit.cover,
+                  memCacheWidth: 300,
+                  placeholder: (context, url) => Container(color: Colors.black12),
+                  errorWidget: (context, url, error) => const Icon(Icons.broken_image_outlined, color: Colors.grey),
                 ),
               );
             },
